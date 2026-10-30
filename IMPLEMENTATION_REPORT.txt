@@ -1,0 +1,1058 @@
+================================================================================
+KEYSOUND - PER-KEY KEYBOARD SOUND SYSTEM FOR KALI LINUX
+IMPLEMENTATION REPORT
+================================================================================
+
+Version:      1.0.0
+Date:         30 October 2026
+Platform:     Kali GNU/Linux Rolling (Linux 7.1.5+kali-amd64)
+Desktop:      Xfce on X11, DISPLAY=:0.0
+Runtime:      Python 3.14.7, PyGObject 3.56.2, GTK 3.24.52, GLib 2.90.0,
+              numpy 2.3.5, libpulse 17.0, libayatana-appindicator 0.5.94
+Source root:  /home/hicham/Desktop/projects/shotgunkeyboard
+
+--------------------------------------------------------------------------------
+CONTENTS
+--------------------------------------------------------------------------------
+1.  Purpose and scope
+2.  Constraints and design decisions
+3.  System architecture
+4.  Input subsystem
+5.  Audio subsystem
+6.  Rule model, configuration, and profiles
+7.  User interface
+8.  Privacy and security
+9.  Packaging and deployment
+10. Testing and verification
+11. Generated sounds and icons
+12. Known limitations
+13. Possible future work
+14. Reproduction checklist
+Appendix A - Source file map
+Appendix B - Default assignments
+Appendix C - Command-line interface
+Appendix D - Licence notes
+
+--------------------------------------------------------------------------------
+1. PURPOSE AND SCOPE
+--------------------------------------------------------------------------------
+
+The project implements a finished, Kali Linux-only desktop application that
+listens to physical key presses system-wide and plays a different sound for each
+key. The design follows the two supplied briefs:
+
+  - ShotgunKeyboard_PerKey_Sound_Report.pdf
+  - KeySound_Kali_Linux_Guide.pdf
+
+The reference product (shotgunkeyboard.com) plays one sound for every key and
+supports only macOS and Windows. The brief explicitly corrects that: per-key
+mapping and the Linux implementation are new work. This project therefore does
+not copy the reference product; it implements a new per-key engine, a Linux
+input layer, a Linux audio path, and a visual editor.
+
+The requested scope was:
+
+  - Kali Linux only. No Windows or macOS builds.
+  - System-wide key capture.
+  - Tray/menu icon and a visual keyboard editor.
+  - Per-key sounds with group/default fallbacks.
+  - Per-key volume and pitch.
+  - 12-voice polyphony, round-robin and random variants.
+  - On/off, master volume 10-100 %, hold-to-repeat, modifier-key toggle,
+    autostart, test sound, and a global mute hotkey.
+  - Persistent JSON settings at ~/.config/keysound/settings.json.
+  - Strict privacy: never log, store, or transmit pressed keys.
+  - evdev as the primary backend, hot-plug support, PipeWire/PulseAudio audio,
+    and .deb/AppImage packaging with a setup helper for the input group.
+
+All of those items are implemented. The only environmental limitation is that
+the current user is not in the "input" group and no sudo password was available,
+so the evdev read path could not be exercised live on this machine. XInput2 was
+live-tested as the automatic X11 fallback. The evdev code, probe, hot-plug
+watcher, and setup script are complete and ready; the setup script is the only
+step needed to enable them.
+
+--------------------------------------------------------------------------------
+2. CONSTRAINTS AND DESIGN DECISIONS
+--------------------------------------------------------------------------------
+
+2.1 Why Python + GTK3 instead of Rust/Tauri
+-------------------------------------------
+The earlier plan considered a Rust/Tauri application. The machine already had
+the complete GTK3, WebKit runtime, Ayatana AppIndicator, GStreamer, PipeWire,
+and X11 libraries installed, but did not have the Rust/Tauri development
+headers, and root access was unavailable to install them. A Rust build would
+have consumed a large amount of time and could still have failed on missing
+system dependencies.
+
+The final application is therefore native Python 3 with PyGObject and GTK 3:
+
+  - It runs immediately on the target Kali desktop.
+  - GTK 3 is already present as part of the desktop.
+  - numpy is present for fast float mixing.
+  - libpulse-simple is present through libpulse0 / PipeWire compatibility.
+  - Ayatana AppIndicator is present for the tray.
+  - The whole application is inspectable and has no web runtime, node_modules,
+    or browser process.
+
+2.2 Native GTK rather than a web UI
+-----------------------------------
+A native GTK UI was chosen over an embedded web view because it starts faster,
+uses less memory, integrates with the desktop theme, and avoids a second
+rendering and IPC stack. The dark visual style is implemented with a single CSS
+file and standard GTK widgets.
+
+2.3 Physical key identity instead of typed characters
+------------------------------------------------------
+Every mapping is keyed by the Linux evdev name (KEY_A, KEY_SPACE, KEY_ENTER,
+KEY_LEFTSHIFT, ...). These are physical key codes, not characters. Benefits:
+
+  - A mapping for KEY_A remains on the same physical key if the user switches
+    between QWERTY, AZERTY, or Dvorak.
+  - The app never needs the resulting character, so it never needs to compose
+    or store text.
+  - The evdev and X11 backends share one configuration format.
+
+The X11 fallback derives the same IDs from Xkb group 0 (US) key symbols, which
+is a physical-key approximation. The evdev backend is exact.
+
+2.4 Original sound set
+----------------------
+All 24 built-in sounds are synthesized deterministically by
+tools/generate_sounds.py using numpy. There are no sampled third-party
+recordings, so there are no licensing questions. The generator is checked in so
+the set can be regenerated byte-for-byte.
+
+2.5 Dual input backend
+----------------------
+evdev is the primary backend because it works on X11 and Wayland, reports
+physical codes, and supports hot-plugging. XInput2 is an automatic fallback on
+X11 because it works immediately without the input group. The user is told
+clearly which backend is active in a banner and in the footer status line.
+
+--------------------------------------------------------------------------------
+3. SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+
+3.1 Process and thread model
+----------------------------
+One process runs the GTK main loop. Background daemon threads do input and
+audio, and never touch GTK directly.
+
+    /dev/input/event*  --> evdev reader thread(s) --\
+                                                      \
+    X11 root window   --> XInput2 reader thread ------> Dispatcher
+                                                          |
+                                                          v
+                                                   Config.resolve(key)
+                                                          |
+                                                          v
+                                                     Mixer.play()
+                                                          |
+                                                          v
+    PulseAudio writer thread <-- Mixer.render(256) <-- voice pool (12)
+
+    Dispatcher.on_activity --> GLib.idle_add --> UI key flash
+    Dispatcher.on_mute     --> GLib.idle_add --> UI badge/toast + tray refresh
+
+Threads:
+
+  - keysound-evdev-<eventN>: one per readable keyboard device.
+  - keysound-evdev-hotplug: rescans /dev/input every 1.2 seconds.
+  - keysound-xinput2: owns a private X11 display connection and reads raw
+    events with select().
+  - keysound-audio: continuously renders 256-frame blocks and writes them to a
+    PulseAudio simple stream.
+
+Locks:
+
+  - Mixer.lock guards the voice list and round-robin counters.
+  - SoundBank.lock guards the decoded sample dictionary.
+  - AudioEngine.lock guards the stream handle and error state.
+  - Dispatcher uses an RLock for the held-key set.
+  - EvdevBackend uses an RLock for its device table and running flag.
+
+3.2 Startup sequence
+--------------------
+1. argparse parses --minimized, --no-tray, --diagnose, --screenshot, --verbose,
+   --version.
+2. Gtk.Application.do_startup installs the dark theme preference and loads
+   keysound/assets/style.css.
+3. do_activate calls _start_services():
+   - ensure XDG directories with restrictive permissions;
+   - load settings (create defaults if missing);
+   - synchronize the launchAtLogin flag with the real autostart file;
+   - load and decode all sounds;
+   - start the PulseAudio writer thread;
+   - probe evdev; use it if permitted, otherwise start XInput2 on X11.
+4. MainWindow is built, refreshed, and selects KEY_A.
+5. Tray is created if enabled.
+6. If --minimized and a tray exists, the window is realized but not shown.
+7. If --screenshot PATH is given (developer flag), the window is shown and a
+   cropped screenshot is written after 1.4 s.
+
+3.3 Shutdown sequence
+---------------------
+do_shutdown cancels the pending debounced save, saves settings, stops the
+listener (closing device file descriptors and joining threads), stops the audio
+thread and frees the PulseAudio stream, destroys the tray indicator, and calls
+Gtk.Application.do_shutdown.
+
+Closing the window hides it to the tray when the indicator is available.
+--no-tray or an unavailable indicator makes close quit the application.
+
+--------------------------------------------------------------------------------
+4. INPUT SUBSYSTEM
+--------------------------------------------------------------------------------
+
+4.1 evdev backend (primary)
+---------------------------
+The backend enumerates /dev/input/event* and opens each node read-only,
+non-blocking. For each node it verifies:
+
+  - EVIOCGBIT(EV_KEY) reports key events;
+  - the key capability bitmap includes KEY_A. This excludes mice, touchpads,
+    and media-only nodes;
+  - EVIOCGNAME returns a human-readable device name for the status line.
+
+Permission errors are counted so the UI can distinguish "permission denied"
+from "no keyboard found".
+
+Each device gets a reader thread. The thread uses select() with a 0.35 s timeout
+so it can notice shutdown, reads up to 64 input_event records at once, and
+unpacks the Linux struct input_event ("llHHi": seconds, microseconds, type,
+code, value). Only EV_KEY records with value 0 (release), 1 (press), or 2
+(autorepeat) are forwarded. The code is translated through CODE_TO_KEY to the
+public KEY_* identifier.
+
+The hot-plug watcher rescans every 1.2 seconds, opens newly appeared event
+nodes, and closes nodes that disappeared. This handles USB keyboards, Bluetooth
+keyboards, and docking stations without restarting the app.
+
+The evdev probe on this machine correctly reports:
+
+    evdev permission required.
+    sudo usermod -aG input hicham  # then log out and back in
+
+because /dev/input/event* is mode 0660 root:input.
+
+4.2 XInput2 fallback (X11)
+--------------------------
+The fallback opens its own X11 display connection and selects XI_RawKeyPress
+(13) and XI_RawKeyRelease (14) on the root window for XIAllMasterDevices using
+XISelectEvents. Raw events are delivered regardless of which window has focus.
+
+The event is read with XNextEvent/XGetEventData. The device keycode is taken
+from the raw event data. A physical keycode-to-key-ID table is built once by
+walking keycodes 8-255 and calling XkbKeycodeToKeysym(display, code, group=0,
+level=0), then XKeysymToString, then the KEYSYM_TO_KEY table. Group 0 is the US
+layout, so the mapping is physical rather than character-based. On this machine
+139 keycodes were mapped.
+
+Repeats: XInput2 raw events do not carry the evdev repeat flag. The backend
+keeps a set of held keycodes. A press for an already-held keycode, or a press
+within 30 ms of that keycode's release, is reported as value 2 (autorepeat).
+Otherwise it is value 1.
+
+Live test with xdotool produced exactly:
+
+    KEY_A press/release
+    KEY_LEFTSHIFT press
+    KEY_A press/release
+    KEY_LEFTSHIFT release
+    KEY_SPACE press/release
+
+which confirms physical mapping and modifier identification.
+
+4.3 Wayland
+-----------
+Wayland does not expose global key events to ordinary clients. The XInput2
+fallback is therefore X11-only. evdev is the Wayland path: after the user joins
+the input group and re-logs in, the same application reads /dev/input directly
+and works on both X11 and Wayland. The UI banner and Input status dialog explain
+this and provide a copyable command.
+
+4.4 Dispatcher and repeat policy
+--------------------------------
+Dispatcher.handle(key_id, value) implements:
+
+  - Release (0): remove from the held set and optionally play a key-up rule.
+  - Press/repeat: add to the held set.
+  - Mute chord: if the key is KEY_M and Ctrl+Alt+Shift are all held, toggle the
+    saved muted state on the initial press only. The chord is detected before
+    the enabled check, so it also works while KeySound is disarmed or muted.
+  - If disabled, return.
+  - If the key is a modifier and modifiersEnabled is false, return.
+  - Resolve the key's rule (key override > group > default).
+  - Apply per-rule repeat policy:
+      repeat == False  -> suppress autorepeat;
+      repeat == True   -> allow autorepeat;
+      repeat is None   -> follow the global holdToRepeat setting.
+  - Play, then notify the UI for the key flash.
+
+The global chord is Ctrl+Alt+Shift+M. Detecting it inside the key stream instead
+of registering an X11/Wayland global shortcut avoids compositor restrictions and
+works identically on both backends. A normal M press without all three
+modifiers is unaffected.
+
+--------------------------------------------------------------------------------
+5. AUDIO SUBSYSTEM
+--------------------------------------------------------------------------------
+
+5.1 Format
+----------
+The internal format is 48,000 Hz, mono, float32. Output to PulseAudio is signed
+16-bit little-endian mono. Mono was chosen because the sounds are point sources;
+the mixer is simpler and half the buffer bandwidth is used.
+
+5.2 Sound bank and WAV decoding
+-------------------------------
+SoundBank loads every *.wav from keysound/assets/sounds and from
+~/.local/share/keysound/sounds. A custom file with the same name overrides the
+built-in one. The manifest supplies human labels and descriptions.
+
+decode_wav supports PCM WAV with 1, 2, 3, or 4 bytes per sample:
+
+  - 8-bit unsigned: (value - 128) / 128;
+  - 16-bit signed little-endian: value / 32768;
+  - 24-bit signed little-endian: sign-extended, value / 8388608;
+  - 32-bit signed little-endian: value / 2147483648.
+
+Multi-channel input is averaged to mono. Non-48 kHz input is linearly
+resampled. Files longer than 2.0 seconds are truncated. The decoded signal has
+its DC offset removed and receives a 1.5 ms fade-in/fade-out to prevent clicks.
+Empty or invalid files are recorded in SoundBank.errors and skipped instead of
+crashing startup.
+
+5.3 Voice mixer
+---------------
+A Voice stores: sample array, fractional position, step (playback rate), gain,
+birth counter, key ID, and sound name.
+
+Mixer.play(rule, key_id, force=False):
+
+  - refuses to play when the config is disabled, unless force=True (used by
+    Preview and Test);
+  - chooses a variant according to the rule;
+  - looks up the decoded sample; if it is missing, falls back to the global
+    default sound;
+  - applies uniform pitch jitter in [-jitter, +jitter], clamps the result to
+    0.5-2.0, and sets gain = rule.volume * masterVolume;
+  - inserts a voice. If 12 voices are already active, the oldest is stolen.
+
+Mixer.render(frames) copies the voice list under the lock, mixes each voice with
+linear interpolation, advances positions, removes finished voices, and clips the
+sum to +/-0.98. The 12-voice limit is the requested polyphony ceiling.
+
+Variant selection:
+
+  - single:      first sound;
+  - random:      uniform random choice;
+  - roundRobin:  per-rule-source counter modulo the variant count.
+
+Round-robin counters are keyed by rule.source, so a group's rotation is
+independent of individual keys.
+
+5.4 PulseAudio / PipeWire engine
+--------------------------------
+The engine uses ctypes to call libpulse-simple directly:
+
+  pa_simple_new(name="keysound", stream="per-key keyboard audio",
+                PA_STREAM_PLAYBACK, PA_SAMPLE_S16LE, 48000 Hz, 1 channel)
+  pa_simple_write(...)
+  pa_simple_free(...)
+
+Buffer attributes:
+
+  maxlength = 4096 bytes (2048 frames, ~42.7 ms)
+  tlength   = 1536 bytes (768 frames, ~16 ms target)
+  prebuf    = 1024 bytes (512 frames, ~10.7 ms)
+  minreq    = 256 bytes (128 frames, ~2.7 ms)
+
+The writer renders 256 frames (5.33 ms) per iteration. If a write fails (device
+switch, PipeWire restart, suspend), the stream is closed and reopened with
+backoff instead of taking down the UI. Latency is sampled occasionally with
+pa_simple_get_latency.
+
+PipeWire is used through its PulseAudio compatibility layer on Kali; the same
+code also works with real PulseAudio. No GStreamer pipeline is used because the
+simple API gives direct control and lower overhead for this workload.
+
+5.5 Performance characteristics
+-------------------------------
+  - Decoding happens once at startup (24 short files, a few hundred KB total).
+  - Mixing is vectorized with numpy per voice; typical typing uses 1-4 voices.
+  - The render thread does no allocation beyond the output array and clip.
+  - UI updates are coalesced through GLib.idle_add.
+  - The chosen 16 ms target buffer balances latency against Python scheduling
+    jitter; it is well below the threshold where typing feels disconnected.
+
+--------------------------------------------------------------------------------
+6. RULE MODEL, CONFIGURATION, AND PROFILES
+--------------------------------------------------------------------------------
+
+6.1 Rule precedence
+-------------------
+resolve(key_id):
+
+  1. An enabled per-key override in settings.keys[KEY_*].
+  2. An enabled group fallback for the key's group.
+  3. The global defaultSound.
+
+Each resolved Rule contains: sounds tuple, mode, volume, pitch, jitter, source
+("key", "group:<name>", or "default"), label, and optional repeat override.
+
+Groups are: letters, digits, punctuation, modifiers, function, navigation,
+numpad, controls, media. Every known key maps to exactly one group through
+GROUP_OF_KEY, with controls as the fallback category.
+
+6.2 Defaults
+------------
+The shipping profile is "Kali Field Kit". Defaults include 5 per-key overrides
+(space, enter, keypad enter, backspace, escape) and group rules for all nine
+groups. Letters, digits, punctuation, modifiers, function, numpad, and media use
+random variants; navigation uses round-robin; controls use the default thock.
+Modifier volume is 0.75 and function volume 0.9 so they sit under the main keys.
+
+6.3 Sanitization
+----------------
+clean_rule() is the single validation gate for settings and profiles:
+
+  - sounds must be a list of basenames ending in .wav/.wave; slashes, "..",
+    absolute paths, and non-WAV extensions are rejected;
+  - mode must be single/random/roundRobin, otherwise single;
+  - volume is clamped to 0.0-1.5, pitch to 0.5-2.0, jitter to 0.0-0.10;
+  - enabled is coerced to bool;
+  - repeat is True/False/None.
+
+Config._merge clamps master volume to 0.1-1.0, coerces booleans, limits the
+profile name to 80 characters, forces the documented mute hotkey, rejects
+unknown KEY_* entries, and drops rules whose sound list is empty. An explicit
+"keys": {} is authoritative (it means "no overrides") rather than silently
+restoring the default overrides; omitting the key entirely restores defaults.
+
+6.4 Persistence
+---------------
+Settings path: ~/.config/keysound/settings.json (XDG_CONFIG_HOME respected).
+
+save() writes to a temporary file in the same directory, flushes and fsyncs,
+atomically replaces the target, and chmods it to 0600. The config directory is
+created with 0700 where the filesystem allows it. This prevents a partial file
+from being read after a crash or power loss.
+
+load() backs up an unparseable file to settings.json.corrupt and starts from
+defaults, so a corrupt profile can never prevent the application from starting.
+
+6.5 Profiles
+------------
+Export produces a .keysound file, which is a ZIP containing:
+
+  - profile.json: the full settings object;
+  - manifest.json: format name, version, UTC creation timestamp;
+  - custom_sounds/<name>.wav for every custom sound referenced by the profile.
+
+Import reads profile.json, sanitizes it through the same merge path, restores
+custom sounds using only the basename of each archive member (preventing path
+traversal), preserves the current launchAtLogin preference, then marks the
+config dirty. Built-in sounds are not copied, so bundles stay small.
+
+--------------------------------------------------------------------------------
+7. USER INTERFACE
+--------------------------------------------------------------------------------
+
+7.1 Layout
+----------
+The main window is a GTK ApplicationWindow with a custom HeaderBar:
+
+  - Header: menu button, app icon, "KEYSOUND / PER-KEY SOUND // KALI EDITION",
+    ARMED/SAFE/MUTED badge, power switch, window controls.
+  - Input banner: shown only when evdev is not active, with an Input setup
+    button.
+  - Control card: master volume 10-100 %, Hold to repeat, Modifier keys, Start
+    at login, Mute, Test hit.
+  - Left column: "PHYSICAL KEY MAP" card containing the visual keyboard and a
+    DEFAULT FALLBACK bar (sound selector + Preview).
+  - Right column: Key / Groups stack with a scrollable inspector.
+  - Footer: backend status dot and text, "12 voices / 48 kHz / local only".
+  - Profile bar: privacy statement, profile name, Import, Export, Settings
+    folder.
+  - Toast overlay: transient confirmations/errors, implemented with
+    Gtk.Overlay + Gtk.Revealer.
+
+The window was verified at 1280x860 content size on a 1080p Xfce desktop. The
+CSS supports smaller windows through a horizontal keyboard scroller and a
+scrollable inspector.
+
+7.2 Visual keyboard
+-------------------
+keymap.keyboard_layout() returns three sections:
+
+  - main: 6 rows, including Esc, 12 function keys, number row, QWERTY block,
+    modifiers, space, menu, and right Ctrl;
+  - nav: Print Screen/Scroll Lock/Pause, Insert/Home/PgUp, Delete/End/PgDn,
+    arrow cluster;
+  - numpad: Num Lock, operators, digits, tall plus and Enter, wide zero.
+
+Keycaps are real Gtk.Buttons with width units. Widths and gaps are scaled from
+BASE_KEY=32 px and KEY_HEIGHT=42 px, with a 30 px function row. Every keycap
+has a label, a tooltip with its KEY_* ID and resolved rule, and four visual
+states:
+
+  - mapped: orange bottom border (custom override);
+  - selected: blue outline;
+  - pressed: blue gradient flash for ~110 ms on live input;
+  - default/modifier/function/accent styling by category.
+
+Clicking a key selects it and opens the Key inspector.
+
+7.3 Inspectors
+--------------
+The Key inspector shows:
+
+  - source ("Using Letters group" or "Custom override - A") and the KEY_* ID;
+  - sound selector with a "__fallback__" entry to clear the override;
+  - variant chips with an add button and per-chip remove;
+  - playback mode;
+  - volume, pitch, pitch-jitter sliders with live percentage labels;
+  - Preview and Reset in the header row.
+
+Edits apply immediately (debounced save after 220 ms), so there is no Apply
+button to forget. Selecting a sound replaces the variant list with that sound;
+"Add" appends another variant. The Reset button is shown only when an override
+exists for the selected key.
+
+The Groups inspector provides the same editor for a group fallback, with a
+combo box to switch groups and a Reset that restores the shipped group default.
+
+7.4 Default fallback bar
+------------------------
+The bar under the keyboard selects the global defaultSound, previews it, and
+explains that it is used only when a key and its group are both silent. This
+closes a gap in the original UI, where default.wav existed in the config but
+could not be changed.
+
+7.5 Tray
+--------
+keysound/tray.py uses AyatanaAppIndicator3 (StatusNotifierItem). Menu items:
+
+  - Open KeySound;
+  - Armed (check);
+  - Mute (check);
+  - Start at login (check);
+  - Test sound;
+  - Input status...;
+  - Quit KeySound.
+
+Refresh is guarded by a _syncing flag to prevent signal loops. If the indicator
+cannot be created, the app logs a warning and continues without a tray.
+
+7.6 Autostart
+-------------
+autostart.py writes an XDG autostart entry at
+~/.config/autostart/keysound.desktop with Exec pointing to /usr/bin/keysound if
+installed, otherwise to this checkout's run.py, followed by --minimized. The
+entry is written atomically and mode 0644. On startup, sync_from_disk reconciles
+the config flag with the file's actual presence so manual edits are respected.
+The UI exposes this as a "Start at login" switch and the tray exposes it as a
+check item.
+
+7.7 Dialogs
+-----------
+  - Import sound: file chooser filtered to WAV; validates by decoding before
+    copying; stores as custom-<name>.wav with collision numbering.
+  - Import/Export profile: .keysound file chooser with overwrite confirmation.
+  - Input status: explains the active backend, provides a copyable
+    "sudo usermod -aG input $USER" command, the logout/relogin instruction, and
+    a privacy note.
+  - About: version, description, MIT licence, original icon.
+
+--------------------------------------------------------------------------------
+8. PRIVACY AND SECURITY
+--------------------------------------------------------------------------------
+
+8.1 Data flow
+-------------
+A key event exists only as:
+
+  (device, type, code, value)
+    -> KEY_* identifier
+    -> rule lookup
+    -> sound name
+    -> mixer voice
+    -> audio samples
+
+The KEY_* identifier is used for the rule lookup, the optional UI flash, and the
+optional key-up rule. It is not appended to a list, file, socket, or log. The
+UI flash is an in-memory style-class change that expires after 110 ms.
+
+8.2 What is stored
+------------------
+Only configuration is stored:
+
+  - sound filenames and per-key/group parameters;
+  - profile name and default fallback;
+  - master volume, toggles, mute state;
+  - autostart preference;
+  - the fixed mute hotkey string.
+
+No key history, character stream, timing data, window titles, application names,
+or device event logs are stored. There is no network client in the codebase, no
+telemetry, no account, and no update checker.
+
+8.3 File permissions
+--------------------
+  - Config/data/cache directories: 0700 where possible.
+  - settings.json: 0600.
+  - Autostart desktop file: 0644 (it contains no secrets).
+  - Imported sounds: ordinary user-owned files.
+
+8.4 Diagnose is non-invasive
+----------------------------
+python3 -m keysound --diagnose prints only: version, config path, whether the
+config exists, sound count and decode errors, evdev permission status, X11
+display/session/keycode count, audio running/error, group count, override count,
+and a privacy reminder. It does not open input devices or capture events. It
+also loads the config with create=False so a diagnostic run does not create a
+settings file.
+
+8.5 The input group is powerful
+-------------------------------
+Membership in "input" grants read access to every input device, including
+keyboards, mice, and potentially sensitive devices. KeySound itself only reads
+key events and never records them, but the permission is process-wide. The setup
+script prints this warning, and the application does not add the group in a
+package post-install script. This is an explicit user decision.
+
+8.6 Profile import hardening
+----------------------------
+  - Archive members are only extracted from custom_sounds/ and must end in .wav.
+  - Only Path(member).name is used, so "../" members cannot escape the target.
+  - JSON is sanitized by clean_rule/_merge.
+  - Unknown keys and malformed rules are discarded.
+  - No executable content is extracted or run.
+
+--------------------------------------------------------------------------------
+9. PACKAGING AND DEPLOYMENT
+--------------------------------------------------------------------------------
+
+9.1 Setup helper
+----------------
+scripts/setup-kali.sh:
+
+  - re-executes itself with sudo when needed;
+  - detects Kali/Debian/Ubuntu from /etc/os-release;
+  - installs python3, python3-gi, python3-numpy, gir1.2-gtk-3.0,
+    gir1.2-ayatanaappindicator3-0.1, libpulse0, libx11-6, libxi6, xdg-utils;
+  - verifies the packages with dpkg;
+  - adds the invoking desktop user (SUDO_USER) to the input group unless
+    already present;
+  - prints the logout/relogin requirement and a privacy warning;
+  - supports --skip-apt and --skip-group.
+
+It does not install the application and does not modify keyboard mappings.
+
+9.2 Debian package
+------------------
+packaging/build-deb.sh stages:
+
+  /usr/bin/keysound                         (launcher)
+  /usr/lib/keysound/keysound/               (Python package + assets)
+  /usr/lib/keysound/run.py
+  /usr/share/applications/keysound.desktop
+  /usr/share/icons/hicolor/{16..256}/apps/keysound.png
+  /usr/share/icons/hicolor/scalable/apps/keysound.svg
+  /usr/share/keysound/setup-kali.sh
+  /usr/share/doc/keysound/{README.md,IMPLEMENTATION_REPORT.txt,copyright}
+  /usr/share/doc/keysound/... (Debian metadata)
+
+Control fields:
+
+  Package: keysound
+  Version: 1.0.0
+  Architecture: all
+  Section: sound
+  Depends: python3 (>= 3.10), python3-gi, python3-numpy, gir1.2-gtk-3.0,
+           gir1.2-ayatanaappindicator3-0.1, libpulse0, libx11-6, libxi6,
+           xdg-utils
+  Recommends: pipewire-pulse | pulseaudio
+
+postinst refreshes the icon cache and desktop database, then prints the setup
+command and logout reminder. prerm is a no-op. User settings are never touched
+by package scripts.
+
+The package is built with:
+
+    ./packaging/build-deb.sh
+
+and installed with:
+
+    sudo apt-get install -y ./dist/keysound_1.0.0_all.deb
+
+9.3 AppImage
+------------
+packaging/build-appimage.sh builds a thin AppDir/AppImage: it bundles the
+KeySound Python code, assets, launcher, desktop entry, and icon, but uses the
+system Python 3, PyGObject, GTK3, numpy, and PulseAudio. Those are installed by
+the setup helper. appimagetool is required and was not present on this machine,
+so the .deb is the tested artifact. The script prints exact instructions when
+appimagetool is missing. A fully self-contained AppImage would need to bundle
+GTK typelibs and a Python runtime and would be much larger and more
+distro-sensitive; the thin wrapper is deliberate.
+
+9.4 Desktop integration
+-----------------------
+packaging/keysound.desktop is validated with desktop-file-validate. It declares
+Type=Application, Categories=Utility;AudioVideo;, StartupNotify=false, an icon
+name, and StartupWMClass=keysound. The app also sets a default window icon.
+
+--------------------------------------------------------------------------------
+10. TESTING AND VERIFICATION
+--------------------------------------------------------------------------------
+
+10.1 Unit test suite
+--------------------
+Command:
+
+    python3 -m unittest discover -s tests -t . -v
+
+Result: 57 tests, 0 failures, 0 errors (0.025 s).
+
+Coverage by file:
+
+  tests/test_config.py (18 tests)
+    - group fallback, key override precedence, modifier group;
+    - disabled group falls through to default; disabled key override ignored;
+    - master volume clamping; enabled/muted independence;
+    - atomic save/load roundtrip and 0600 permissions;
+    - corrupt JSON backup and default recovery;
+    - explicit empty "keys" map is kept;
+    - malicious/unknown profile values sanitized;
+    - path traversal and wrong extensions rejected;
+    - volume/pitch/jitter/mode clamping;
+    - all built-in sounds resolve; unknown sound returns None;
+    - profile export/import including custom WAV restoration;
+    - malformed profile archive rejected.
+
+  tests/test_keymap.py (7 tests)
+    - evdev code roundtrip, uniqueness, labels, all groups;
+    - layout contains every essential key exactly once, >= 90 keys;
+    - positive widths; every layout key exists in the code table;
+    - all_known_keys sanity.
+
+  tests/test_audio.py (15 tests)
+    - 16-bit mono, stereo downmix, 8/24/32-bit, resampling, 2 s cap, empty file;
+    - voice gain and pitch, pitch clamping, 12-voice stealing;
+    - muted block + forced play, missing sound fallback;
+    - round-robin order, single mode, render/finish, silence, panic.
+
+  tests/test_dispatcher.py (13 tests)
+    - press/activity, autorepeat filtering, hold-to-repeat;
+    - per-key repeat override, modifier gating, disabled app;
+    - mute chord toggling without playing M, repeat does not re-toggle,
+      chord works while disabled, plain M is safe;
+    - key-up sound, silent release, forced test, panic.
+
+  tests/test_autostart.py (4 tests)
+    - valid desktop entry with --minimized, removal, idempotent disable,
+      sync_from_disk in both directions.
+
+10.2 End-to-end GTK smoke test
+------------------------------
+A temporary script (not shipped) instantiated the real KeySoundApp with an
+isolated config under /tmp/opencode, used the real tray and audio engine, and
+ran 17 checks. Result: 17/17 passed.
+
+Checks performed:
+
+  1.  per-key assignment (KEY_B -> shotgun.wav);
+  2.  keyboard shows the mapped override state;
+  3.  group assignment (letters -> round-robin);
+  4.  clearing an override restores the group fallback;
+  5.  default fallback changed to boom.wav;
+  6.  autostart enable creates the .desktop file;
+  7.  autostart disable removes it;
+  8.  mute toggle updates config and ARMED/MUTED badge;
+  9.  unmute restores ARMED;
+  10. audio engine opens and stays running with no error;
+  11. profile export produces a non-trivial bundle;
+  12. profile import restores the KEY_B override;
+  13. a custom WAV is loaded into the sound bank;
+  14. the custom WAV can be assigned to a key;
+  15. the Ayatana tray is available;
+  16. the input backend is active (XInput2 on this machine);
+  17. no key-log file exists in the isolated session directory.
+
+10.3 Manual input tests
+-----------------------
+Using xdotool against the running listener:
+
+  - KEY_A, Shift+A, and Space were reported with correct press/release values.
+  - Modifiers were distinguished as KEY_LEFTSHIFT/KEY_LEFTCTRL/KEY_LEFTALT.
+  - Ctrl+Alt+Shift+M toggled the muted state to true, and a second chord
+    toggled it back to false.
+  - Auto-repeat was synthesized and filtered according to the hold-to-repeat
+    setting.
+  - The mute chord did not play a sound for M.
+
+10.4 Audio tests
+----------------
+  - libpulse-simple.so.0 loaded successfully.
+  - A 48 kHz mono stream opened against PipeWire's PulseAudio compatibility
+    layer and remained running.
+  - A 256-frame render of a letter rule produced non-zero output (peak ~0.43 in
+    the isolated test, before master gain in normal use).
+  - Starting/stopping the engine did not raise or hang the UI.
+  - pa_simple_get_latency was queried without error.
+
+10.5 UI verification
+--------------------
+The window was captured programmatically with Gdk.pixbuf_get_from_window. The
+screenshot function crops the GTK client-side shadow by finding the bounding box
+of fully opaque pixels. The final screenshot is docs/screenshot.png and shows:
+
+  - complete header, ARMED badge and power switch;
+  - input fallback banner with Input setup;
+  - master volume, three toggles, Mute, Test hit;
+  - full 105-key visual keyboard with orange mapped underlines;
+  - key inspector with Preview button, sound, variants, mode, and all three
+    sliders fully visible;
+  - default fallback bar;
+  - backend footer and profile bar with Import/Export/Settings folder.
+
+10.6 Diagnose
+-------------
+    python3 -m keysound --diagnose
+
+produced (this machine):
+
+    version: 1.0.0
+    sounds: 24, sound_errors: {}
+    evdev.permission_ok: false
+    evdev.detail: evdev permission required. sudo usermod -aG input hicham ...
+    x11.display: true, x11.session: x11, x11.keycodes_mapped: 139
+    audio.running: true, audio.error: null
+    groups: 9, keys_with_overrides: 5
+    privacy: No key events are logged by diagnose().
+
+10.7 What could not be tested live
+----------------------------------
+The evdev reader path could not be exercised because the current user is not in
+the input group and no sudo password was available. It was verified by code
+review and by the probe's correct permission diagnosis. The XInput2 path was
+live-tested end to end. After running the setup helper and re-logging in, the
+same Dispatcher, Mixer, and UI are used; only the event source changes.
+
+--------------------------------------------------------------------------------
+11. GENERATED SOUNDS AND ICONS
+--------------------------------------------------------------------------------
+
+11.1 Sounds
+-----------
+tools/generate_sounds.py writes 24 mono 48 kHz 16-bit WAVs plus manifest.json.
+It uses a fixed RNG seed (0x5A17) so output is deterministic. The key sounds are
+built from a small physical model rather than a single oscillator:
+
+  - a 1-2 ms broadband impact transient (stem / click-jacket contact);
+  - inharmonic plastic-snap resonances between 4.2 and 8.9 kHz;
+  - a metallic spring ping between 6.4 and 9.7 kHz;
+  - plate/housing modes between 1.32 and 4.15 kHz;
+  - a delayed low bottom-out thock around 178/292 Hz;
+  - a filtered housing/air tail; and
+  - gentle saturation for the plastic "edge".
+
+Pitch, transient level, body weight, spring level, brightness, and duration are
+parameters, so letter/digit/punctuation/modifier variants differ naturally. The
+default set is tuned bright and high; thock.wav is a deeper alternate, space.wav
+and boom.wav carry more low weight, and shotgun.wav is an optional showpiece.
+
+Files: default, thock, boom, space, backspace, escape, letter-1..3, digit-1..2,
+mod-1..2, fn-1..2, nav-1..2, numpad-1..2, punct-1..2, release, test, shotgun.
+
+11.2 Icons
+-----------
+tools/generate_icons.py draws a 512 px master with Pillow at 4x supersampling:
+a dark rounded tile, a keycap with a "K", orange/blue sound arcs, and a status
+dot. It writes keysound.png, sizes 16-256, a tray image, an ICO (harmless
+portability artifact), and keysound.svg is a hand-written scalable version.
+
+--------------------------------------------------------------------------------
+12. KNOWN LIMITATIONS
+--------------------------------------------------------------------------------
+
+  - Linux only by design; there is no Windows or macOS target.
+  - Wayland requires evdev permission. The XInput2 fallback is X11-only.
+  - The evdev read path was not live-tested on this machine (no input group and
+    no sudo password). The setup script and probe are ready.
+  - WAV is the only import format. Ogg/MP3/FLAC would require an external
+    decoder.
+  - Key-up sounds exist in the config format (keyUp) and the dispatcher, but
+    there is no dedicated GUI for them yet.
+  - The AppImage build is a thin wrapper and requires system GTK/Python/numpy.
+  - The X11 fallback derives physical IDs from Xkb group 0 (US). Exotic remaps
+    or non-US group-0 layouts may differ; evdev is exact.
+  - There is no audio-device picker; the default PulseAudio/PipeWire sink is
+    used.
+  - There is no profile gallery/manager; profiles are exported and imported as
+    files.
+  - The mute chord is fixed at Ctrl+Alt+Shift+M in this version.
+  - KeySound does not suppress or remap keystrokes; it only adds sound.
+  - Some keyboards expose multiple event nodes; the KEY_A capability check
+    filters most non-keyboards, but duplicate-capable composite devices could
+    theoretically produce duplicate events. The hot-plug table is per device.
+  - No localization yet; all UI strings are English.
+  - No sandboxing. The app runs with the user's normal privileges plus whatever
+    input-device access the input group grants.
+
+--------------------------------------------------------------------------------
+13. POSSIBLE FUTURE WORK
+--------------------------------------------------------------------------------
+
+  - Expose key-up assignment in the UI (the data model already supports it).
+  - Add a sound trim/normalize preview and waveform display.
+  - Add per-application profiles (requires window/application tracking, which
+    would need a careful privacy design).
+  - Add Ogg/FLAC decoding through GStreamer or libsndfile.
+  - Add an audio output device selector through PipeWire.
+  - Add a profile manager with recent profiles and import preview.
+  - Add a configurable mute chord and additional global shortcuts.
+  - Add a native evdev udev rule alternative to the input group.
+  - Add localization.
+  - Add CI that runs the unit suite and a headless GTK smoke test.
+
+--------------------------------------------------------------------------------
+14. REPRODUCTION CHECKLIST
+--------------------------------------------------------------------------------
+
+From the project root:
+
+    # 1. Run the tests
+    python3 -m unittest discover -s tests -t . -v
+
+    # 2. Check the environment
+    python3 -m keysound --diagnose
+
+    # 3. Run from source (X11 fallback works immediately)
+    python3 -m keysound
+
+    # 4. Enable the Wayland-ready evdev backend
+    sudo ./scripts/setup-kali.sh
+    # log out and back in
+    python3 -m keysound
+
+    # 5. Build and install the Debian package
+    ./packaging/build-deb.sh
+    sudo apt-get install -y ./dist/keysound_1.0.0_all.deb
+
+    # 6. Optional AppImage (requires appimagetool)
+    APPIMAGETOOL=/path/to/appimagetool ./packaging/build-appimage.sh
+
+Regenerate deterministic assets:
+
+    python3 tools/generate_sounds.py
+    python3 tools/generate_icons.py
+
+Reset user data if desired:
+
+    rm -rf ~/.config/keysound ~/.local/share/keysound ~/.cache/keysound
+    rm -f ~/.config/autostart/keysound.desktop
+
+--------------------------------------------------------------------------------
+APPENDIX A - SOURCE FILE MAP
+--------------------------------------------------------------------------------
+
+keysound/
+  __init__.py       version export
+  __main__.py       argparse CLI
+  paths.py          XDG paths, app constants, directory creation
+  keymap.py         evdev code table, X11 keysym map, labels, groups, layout
+  config.py         defaults, clean_rule, Config, resolve, profiles
+  audio.py          SoundBank, decode_wav, Voice, Mixer, AudioEngine
+  listener.py       EvdevBackend, X11Backend, Listener, BackendStatus
+  dispatcher.py     mute chord, repeat policy, key-up, test/panic
+  autostart.py      XDG autostart entry
+  tray.py           Ayatana AppIndicator tray
+  ui.py             MainWindow, KeyboardView, RuleEditor, inspectors
+  app.py            Gtk.Application controller, dialogs, diagnose, screenshot
+  assets/
+    style.css       dark GTK theme
+    sounds/         24 WAVs + manifest.json
+    icons/          PNG/ICO/SVG icons
+
+run.py              source launcher
+tools/              deterministic sound and icon generators
+tests/              unittest suite and helpers
+scripts/            setup-kali.sh
+packaging/          build-deb.sh, build-appimage.sh, keysound.desktop
+docs/screenshot.png final UI screenshot
+README.md           user/developer documentation
+LICENSE             MIT
+IMPLEMENTATION_REPORT.txt  this document
+
+--------------------------------------------------------------------------------
+APPENDIX B - DEFAULT ASSIGNMENTS
+--------------------------------------------------------------------------------
+
+Per-key overrides:
+
+  KEY_SPACE     -> space.wav       pitch 1.00  volume 1.00
+  KEY_ENTER     -> boom.wav        pitch 0.95  volume 1.00
+  KEY_KPENTER   -> boom.wav        pitch 1.00  volume 0.90
+  KEY_BACKSPACE -> backspace.wav   pitch 1.00  volume 1.00
+  KEY_ESC       -> escape.wav      pitch 1.00  volume 0.95
+
+Group fallbacks:
+
+  letters      -> letter-1/2/3.wav   random       volume 1.00
+  digits       -> digit-1/2.wav      random       volume 1.00
+  punctuation  -> punct-1/2.wav      random       volume 1.00
+  modifiers    -> mod-1/2.wav        random       volume 0.75
+  function     -> fn-1/2.wav         random       volume 0.90
+  navigation   -> nav-1/2.wav        roundRobin   volume 1.00
+  numpad       -> numpad-1/2.wav     random       volume 1.00
+  controls     -> default.wav        single       volume 1.00
+  media        -> default.wav        single       volume 0.90
+
+Global default: default.wav. Master volume: 80 %. Hold to repeat: off.
+Modifier sounds: on. Mute hotkey: Ctrl+Alt+Shift+M.
+
+All jitter values are small (0.6-1.8 %) to keep repeated keys from sounding
+identical without making them sound out of tune.
+
+--------------------------------------------------------------------------------
+APPENDIX C - COMMAND-LINE INTERFACE
+--------------------------------------------------------------------------------
+
+python3 -m keysound [options]
+
+  --minimized        start hidden in the tray (used by autostart)
+  --no-tray          do not create the AppIndicator
+  --diagnose         print a non-sensitive JSON environment report and exit
+  --screenshot PATH  developer-only: save a cropped UI screenshot and exit
+  --version          print version and exit
+  --verbose          enable DEBUG logging
+  -h, --help         show help
+
+Installed launcher: keysound (same options).
+
+Exit codes: 0 normally; 1 if diagnose cannot confirm audio and has an audio
+error; 2 for an unknown setup-script option.
+
+--------------------------------------------------------------------------------
+APPENDIX D - LICENCE NOTES
+--------------------------------------------------------------------------------
+
+Application code: MIT (see LICENSE).
+
+Built-in sounds and icons: generated specifically for this project by
+tools/generate_sounds.py and tools/generate_icons.py. The sound manifest marks
+them as CC0-1.0-style project material. No third-party samples, fonts, or icon
+sets are redistributed. The UI uses system fonts through GTK CSS fallbacks
+(Inter, Cantarell, DejaVu Sans, JetBrains Mono, DejaVu Sans Mono) and does not
+bundle font files.
+
+The project is independent of ShotgunKeyboard. The reference product's name is
+used only to describe the origin of the brief.
+
+================================================================================
+END OF REPORT
+================================================================================

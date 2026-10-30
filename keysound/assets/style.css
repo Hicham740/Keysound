@@ -1,0 +1,464 @@
+@define-color bg #0b0f14;
+@define-color panel #121821;
+@define-color panel2 #171f2b;
+@define-color elevated #1c2634;
+@define-color border #263244;
+@define-color border2 #344660;
+@define-color text #e6edf7;
+@define-color dim #8695aa;
+@define-color faint #5f6f85;
+@define-color blue #3fa7ff;
+@define-color blue2 #71c5ff;
+@define-color orange #ff6b4a;
+@define-color green #43d17f;
+@define-color yellow #f5b942;
+@define-color red #ff5570;
+
+* {
+  outline-style: none;
+}
+
+window,
+.background {
+  background-color: @bg;
+  color: @text;
+  font-family: "Inter", "Cantarell", "DejaVu Sans", sans-serif;
+  font-size: 13px;
+}
+
+headerbar {
+  background-image: linear-gradient(to bottom, #151d28, #0f151d);
+  border-bottom: 1px solid @border;
+  box-shadow: none;
+  min-height: 58px;
+  padding: 0 10px;
+}
+
+headerbar .title {
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: @text;
+}
+
+headerbar .subtitle {
+  color: @dim;
+  font-size: 10px;
+  letter-spacing: 1.2px;
+}
+
+headerbar button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: @dim;
+  padding: 7px;
+}
+
+headerbar button:hover {
+  background-color: @elevated;
+  color: @text;
+  border-color: @border2;
+}
+
+.card {
+  background-color: @panel;
+  border: 1px solid @border;
+  border-radius: 14px;
+}
+
+.card-soft {
+  background-color: @panel2;
+  border: 1px solid @border;
+  border-radius: 12px;
+}
+
+.eyebrow {
+  color: @dim;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+}
+
+.title-xl {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+
+.title-lg {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.dim {
+  color: @dim;
+}
+
+.faint {
+  color: @faint;
+}
+
+.mono {
+  font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  font-size: 10px;
+}
+
+.tiny {
+  font-size: 10px;
+}
+
+.big-percent {
+  font-size: 21px;
+  font-weight: 800;
+  color: @blue2;
+}
+
+.badge {
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+  border: 1px solid @border2;
+  background-color: @panel2;
+  color: @dim;
+}
+
+.badge.armed {
+  color: #07131f;
+  background-image: linear-gradient(to right, @blue, @blue2);
+  border-color: @blue2;
+}
+
+.badge.safe {
+  color: @orange;
+  background-color: rgba(255, 107, 74, 0.10);
+  border-color: rgba(255, 107, 74, 0.45);
+}
+
+.badge.muted {
+  color: @yellow;
+  background-color: rgba(245, 185, 66, 0.10);
+  border-color: rgba(245, 185, 66, 0.4);
+}
+
+.status-dot {
+  min-width: 7px;
+  min-height: 7px;
+  border-radius: 99px;
+  background-color: @green;
+}
+
+.status-dot.warn {
+  background-color: @yellow;
+}
+
+.status-dot.bad {
+  background-color: @red;
+}
+
+button {
+  background-image: none;
+  background-color: @elevated;
+  border: 1px solid @border2;
+  border-radius: 8px;
+  color: @text;
+  padding: 7px 12px;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+button:hover {
+  background-color: #243145;
+  border-color: #4b6382;
+}
+
+button:active {
+  background-color: #101722;
+}
+
+button.accent {
+  background-image: linear-gradient(to bottom, @orange, #ef5638);
+  border-color: #ff8d72;
+  color: #1a0905;
+  font-weight: 800;
+}
+
+button.accent:hover {
+  background-image: linear-gradient(to bottom, #ff815f, @orange);
+}
+
+button.blue {
+  background-image: linear-gradient(to bottom, @blue, #2689da);
+  border-color: @blue2;
+  color: #05121e;
+  font-weight: 800;
+}
+
+button.ghost {
+  background-color: transparent;
+  border-color: @border;
+  color: @dim;
+}
+
+button.ghost:hover {
+  background-color: @elevated;
+  color: @text;
+}
+
+button.pill {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11px;
+}
+
+button.key {
+  background-image: linear-gradient(to bottom, #202b3b, #151d28);
+  border: 1px solid @border;
+  border-bottom: 3px solid #080c12;
+  border-radius: 7px;
+  color: #cfdbea;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+button.key:hover {
+  background-image: linear-gradient(to bottom, #293a50, #1a2534);
+  border-color: #4d6b8f;
+  color: #ffffff;
+}
+
+button.key.mod {
+  color: #9bbcdf;
+  background-image: linear-gradient(to bottom, #1d2838, #131b26);
+}
+
+button.key.accent {
+  color: #ffb59f;
+  border-color: #5a342d;
+}
+
+button.key.fn {
+  font-size: 9px;
+  color: #8fa5bf;
+}
+
+button.key.mapped {
+  border-bottom-color: @orange;
+}
+
+button.key.mapped:hover {
+  border-bottom-color: #ff9a7f;
+}
+
+button.key.selected {
+  border-color: @blue;
+  box-shadow: 0 0 0 2px rgba(63, 167, 255, 0.35), 0 2px 4px rgba(0, 0, 0, 0.3);
+  color: #ffffff;
+}
+
+button.key.pressed {
+  background-image: linear-gradient(to bottom, @blue2, @blue);
+  border-color: #a9dcff;
+  border-bottom-color: #1d6fae;
+  color: #04111d;
+}
+
+.key-label {
+  font-weight: 600;
+}
+
+label.section-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: @text;
+}
+
+label.hint {
+  color: @faint;
+  font-size: 10px;
+}
+
+scale trough {
+  min-height: 5px;
+  border-radius: 99px;
+  background-color: #0a0f16;
+  border: 1px solid #202b3a;
+}
+
+scale highlight {
+  min-height: 5px;
+  border-radius: 99px;
+  background-image: linear-gradient(to right, @blue, @blue2);
+}
+
+scale slider {
+  min-width: 14px;
+  min-height: 14px;
+  margin: -5px;
+  border-radius: 99px;
+  background-image: linear-gradient(to bottom, #ffffff, #c7d6e6);
+  border: 2px solid @blue;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+switch {
+  background-color: #0a0f16;
+  border: 1px solid @border2;
+  border-radius: 99px;
+  min-width: 38px;
+  min-height: 21px;
+}
+
+switch:checked {
+  background-image: linear-gradient(to right, @blue, @blue2);
+  border-color: @blue2;
+}
+
+switch slider {
+  background-color: #dce8f5;
+  border-radius: 99px;
+  min-width: 15px;
+  min-height: 15px;
+  margin: 2px;
+}
+
+combobox button {
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+entry {
+  background-color: #0c121a;
+  border: 1px solid @border;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: @text;
+}
+
+entry:focus {
+  border-color: @blue;
+}
+
+separator {
+  background-color: @border;
+  min-width: 1px;
+  min-height: 1px;
+}
+
+menu {
+  background-color: @panel2;
+  border: 1px solid @border2;
+  border-radius: 10px;
+  padding: 5px;
+}
+
+menuitem {
+  border-radius: 6px;
+  padding: 7px 12px;
+}
+
+menuitem:hover {
+  background-color: @elevated;
+}
+
+.flowbox child {
+  background: transparent;
+  padding: 0;
+}
+
+button.chip {
+  background-color: #0c131c;
+  border: 1px solid #2e4056;
+  border-radius: 99px;
+  color: @dim;
+  font-size: 10px;
+  padding: 4px 9px;
+}
+
+button.chip:hover {
+  color: @text;
+  border-color: @orange;
+}
+
+.banner {
+  background-color: rgba(245, 185, 66, 0.07);
+  border: 1px solid rgba(245, 185, 66, 0.35);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.banner.error {
+  background-color: rgba(255, 85, 112, 0.08);
+  border-color: rgba(255, 85, 112, 0.45);
+}
+
+.banner.info {
+  background-color: rgba(63, 167, 255, 0.07);
+  border-color: rgba(63, 167, 255, 0.35);
+}
+
+.toast {
+  background-color: #182231;
+  border: 1px solid @border2;
+  border-radius: 10px;
+  padding: 9px 14px;
+  color: @text;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45);
+}
+
+.toast.error {
+  border-color: rgba(255, 85, 112, 0.6);
+  color: #ffc2cc;
+}
+
+.volume-label {
+  color: @dim;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+}
+
+.panel-head {
+  border-bottom: 1px solid @border;
+}
+
+.keyboard-scroll {
+  background-color: transparent;
+}
+
+.keyboard-scroll viewport {
+  background-color: transparent;
+}
+
+.sidebar-sep {
+  background-color: @border;
+  min-width: 1px;
+}
+
+.profile-bar {
+  background-color: #0e141d;
+  border-top: 1px solid @border;
+}
+
+.statusbar {
+  color: @faint;
+  font-size: 10px;
+}
+
+.check {
+  color: @dim;
+}
+
+.dialog {
+  background-color: @panel;
+}
+
+.dialog .title {
+  font-size: 18px;
+  font-weight: 700;
+}

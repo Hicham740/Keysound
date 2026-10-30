@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=KeySound
+GenericName=Per-key keyboard sound
+Comment=Play a different sound for every physical key
+Exec=keysound
+Icon=keysound
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=keyboard;sound;audio;typing;mechanical;
+StartupNotify=false
+StartupWMClass=keysound
+X-GNOME-UsesNotifications=true

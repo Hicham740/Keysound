@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+
+# Local configuration and generated user data
+settings.json
+*.keysound
+*.corrupt
+
+# Editors and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
