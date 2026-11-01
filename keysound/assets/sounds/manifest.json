@@ -1,68 +1,104 @@
 {
-  "name": "Kali Field Kit \u2014 Arsenal",
+  "name": "Kali Field Kit — Arsenal",
   "version": 3,
-  "license": "user-supplied samples bundled with this profile",
+  "license": "unknown — see CREDITS.md",
   "defaultSound": "default.wav",
   "sounds": [
     {
       "file": "artillery_cannon.wav",
       "label": "Artillery cannon",
-      "description": "Long artillery cannon blast (trimmed to 3 s max) \u2014 44100 Hz, 2.40 s"
+      "description": "Long artillery cannon blast (trimmed to 3 s max) — 44100 Hz, 2.40 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "assault_rifle_auto.wav",
       "label": "Assault rifle (auto)",
-      "description": "Automatic rifle burst \u2014 44100 Hz, 0.80 s"
+      "description": "Automatic rifle burst — 44100 Hz, 0.80 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "bolt_rifle.wav",
       "label": "Bolt-action rifle",
-      "description": "Single bolt-action rifle shot \u2014 44100 Hz, 0.80 s"
+      "description": "Single bolt-action rifle shot — 44100 Hz, 0.80 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "bomb.wav",
       "label": "Bomb explosion",
-      "description": "Deep explosion with debris tail \u2014 44100 Hz, 1.40 s"
+      "description": "Deep explosion with debris tail — 44100 Hz, 1.40 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "default.wav",
       "label": "Default shot",
-      "description": "Standard shot used by every unassigned key and category \u2014 44100 Hz, 0.28 s"
+      "description": "Standard shot used by every unassigned key and category — 44100 Hz, 0.28 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "digit_burst.wav",
       "label": "Digit burst",
-      "description": "Quick burst used for digits \u2014 44100 Hz, 0.30 s"
+      "description": "Quick burst used for digits — 44100 Hz, 0.30 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "machine_gun_burst.wav",
       "label": "Machine gun burst",
-      "description": "Heavy machine gun burst \u2014 44100 Hz, 1.00 s"
+      "description": "Heavy machine gun burst — 44100 Hz, 1.00 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "mag_drop.wav",
       "label": "Magazine drop",
-      "description": "Metallic magazine drop and clack \u2014 44100 Hz, 0.40 s"
+      "description": "Metallic magazine drop and clack — 44100 Hz, 0.40 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "release.wav",
       "label": "Release tick",
-      "description": "Legacy key-up tick (Kept from the original set) \u2014 48000 Hz, 0.03 s"
+      "description": "Legacy key-up tick (Kept from the original set) — 48000 Hz, 0.03 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "shotgun.wav",
       "label": "Shotgun",
-      "description": "Loud shotgun blast \u2014 44100 Hz, 1.30 s"
+      "description": "Loud shotgun blast — 44100 Hz, 1.30 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "sniper_click.wav",
       "label": "Sniper click",
-      "description": "Sharp bolt-action style click \u2014 44100 Hz, 0.60 s"
+      "description": "Sharp bolt-action style click — 44100 Hz, 0.60 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     },
     {
       "file": "tank_cannon.wav",
       "label": "Tank cannon",
-      "description": "Heavy tank cannon shot \u2014 44100 Hz, 1.80 s"
+      "description": "Heavy tank cannon shot — 44100 Hz, 1.80 s",
+      "source": "user-supplied sample",
+      "author": "unknown",
+      "license": "unknown"
     }
   ]
 }

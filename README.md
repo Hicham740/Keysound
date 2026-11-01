@@ -205,8 +205,10 @@ Example (truncated):
 The shipped set is an **arsenal weapon pack** (12 sounds: default shot,
 shotgun, bomb, sniper click, mag drop, digits burst, rifles, machine gun,
 artillery, tank cannon, plus a legacy key-up tick), provided by the user.
-`manifest.json` next to the WAVs lists every file with its label and
-description; only files listed there are shown in the UI.
+`manifest.json` next to the WAVs lists every file with its label, description,
+source, author and licence (`unknown` where not confirmed); only files listed
+there are shown in the UI. See `keysound/assets/sounds/CREDITS.md` for the full
+attribution table.
 
 - Categories ship with **`default.wav` for all of them**: until you assign
   something, every key — letters, digits, modifiers, everything — plays the
@@ -341,6 +343,11 @@ check the file is a valid WAV that decodes without errors.
 
 ## Licence
 
-MIT for the application code. Built-in sounds and icons are original
-project-generated assets. See `LICENSE` and
-`keysound/assets/sounds/manifest.json`.
+MIT for the application code (see `LICENSE`).
+
+The 12 WAV files in `keysound/assets/sounds/` are **user-supplied samples**,
+not project-generated assets. Their author, source and licence are recorded as
+`unknown` in `manifest.json` and `keysound/assets/sounds/CREDITS.md`; confirm
+each sample's licence with its origin before redistributing the app or the
+sounds. The legacy generator in `tools/generate_sounds.py` is project code and
+does not produce the currently shipped samples.

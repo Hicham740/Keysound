@@ -51,11 +51,14 @@ install -Dm644 "${ROOT}/keysound/assets/icons/keysound.svg" \
 install -Dm755 "${ROOT}/scripts/setup-kali.sh" \
     "${STAGE}/usr/share/keysound/setup-kali.sh"
 install -Dm644 "${ROOT}/README.md" "${STAGE}/usr/share/doc/keysound/README.md"
+install -Dm644 "${ROOT}/keysound/assets/sounds/CREDITS.md" \
+    "${STAGE}/usr/share/doc/keysound/CREDITS.md"
 if [[ -f "${ROOT}/IMPLEMENTATION_REPORT.txt" ]]; then
     install -Dm644 "${ROOT}/IMPLEMENTATION_REPORT.txt" \
         "${STAGE}/usr/share/doc/keysound/IMPLEMENTATION_REPORT.txt"
 fi
-install -Dm644 "${ROOT}/LICENSE" "${STAGE}/usr/share/doc/keysound/copyright"
+install -Dm644 "${ROOT}/packaging/copyright" \
+    "${STAGE}/usr/share/doc/keysound/copyright"
 
 INSTALLED_SIZE="$(du -sk "${STAGE}/usr" | cut -f1)"
 cat > "${STAGE}/DEBIAN/control" <<CONTROL

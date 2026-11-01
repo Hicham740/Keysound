@@ -600,9 +600,13 @@ class KeySoundApp(Gtk.Application):
         dialog.set_comments(
             "A per-key keyboard sound system for Kali Linux.\n\n"
             "Physical key codes are mapped to sounds and immediately discarded. "
-            "No keystrokes are logged, stored, or transmitted."
+            "No keystrokes are logged, stored, or transmitted.\n\n"
+            "Application code: MIT. The bundled WAV samples are user-supplied; "
+            "their author and licence are unknown — see CREDITS.md in the sounds "
+            "folder and confirm the licence before redistributing."
         )
         dialog.set_license_type(Gtk.License.MIT_X11)
+        dialog.set_copyright("2026 KeySound contributors. Sound samples: see CREDITS.md.")
         dialog.set_authors(["KeySound contributors"])
         try:
             dialog.set_logo(GdkPixbuf.Pixbuf.new_from_file_at_scale(
