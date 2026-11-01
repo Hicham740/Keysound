@@ -285,7 +285,8 @@ The suite covers:
 - autostart entry creation, removal, and disk synchronization.
 
 Additional manual/automated smoke checks used during development are described
-in `IMPLEMENTATION_REPORT.txt`.
+in `IMPLEMENTATION_REPORT.txt` (a local-only file, intentionally excluded from
+git along with the other `*.txt` notes).
 
 ## Architecture at a glance
 

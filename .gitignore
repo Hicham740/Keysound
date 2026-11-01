@@ -19,3 +19,7 @@ settings.json
 .vscode/
 *.swp
 .DS_Store
+
+# Local-only documentation: installation notes, reports and change logs.
+# Keep these on disk but out of version control.
+*.txt
