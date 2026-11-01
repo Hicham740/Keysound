@@ -223,9 +223,19 @@ unless you pass `--write`, because it would overwrite the weapon samples:
 python3 tools/generate_sounds.py --write   # legacy clicky set (overwrites!)
 ```
 
-Import your own sounds from **Menu → Import sound…**. Only PCM WAV is accepted
-(8/16/24/32-bit, mono or stereo; resampled to 48 kHz). Imports are copied to
-`~/.local/share/keysound/sounds/` with a `custom-` prefix.
+You can add your own sounds in two places:
+
+- **Add WAV…** next to the sound selector in both the Key and Groups
+  inspectors. The file is validated, copied to your personal library, and
+  assigned to the key/category you are editing in one step.
+- **Menu → My sounds…** shows the library with a preview and a remove button,
+  plus its own Add sound… button.
+
+Only PCM WAV is accepted (8/16/24/32-bit, mono or stereo; resampled to
+48 kHz). Files are stored under `~/.local/share/keysound/sounds/` with a
+`custom-` prefix and survive restarts. Name collisions get `-2`, `-3`, …
+suffixes instead of overwriting. Removing a sound also removes it from any
+key/category that referenced it, falling back to `default.wav`.
 
 ## Privacy
 

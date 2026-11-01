@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -14,10 +13,10 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango  # noqa: E402
 
-from . import autostart, paths
-from .audio import AudioEngine, Mixer, SoundBank, decode_wav
+from . import autostart, library, paths
+from .audio import AudioEngine, Mixer, SoundBank
 from .config import Config, Rule
 from .dispatcher import Dispatcher
 from .keymap import key_label
@@ -26,6 +25,13 @@ from .tray import Tray
 from .ui import MainWindow
 
 LOG = logging.getLogger(__name__)
+
+
+def _eyebrow(text: str) -> Gtk.Label:
+    label = Gtk.Label(label=text)
+    label.set_xalign(0.0)
+    label.get_style_context().add_class("eyebrow")
+    return label
 
 
 class KeySoundApp(Gtk.Application):
@@ -310,40 +316,163 @@ class KeySoundApp(Gtk.Application):
         dialog.destroy()
         return filename
 
-    def choose_import_sound(self):
+    def choose_import_sound(self, on_imported=None):
         filename = self._file_dialog(
-            "Import a sound", Gtk.FileChooserAction.OPEN,
+            "Add a sound", Gtk.FileChooserAction.OPEN,
             filters=[("WAV audio", ["*.wav", "*.WAVE"]), ("All files", ["*"])],
         )
         if not filename:
             return
-        source = Path(filename)
         try:
-            data = decode_wav(source)
-            if data.size == 0:
-                raise ValueError("the file contains no audio")
-        except Exception as exc:
+            destination = library.import_sound(filename)
+        except library.SoundImportError as exc:
             if self.window:
-                self.window.toast(f"Unsupported WAV: {exc}", error=True)
+                self.window.toast(f"Could not add sound: {exc}", error=True)
             return
-        stem = re.sub(r"[^A-Za-z0-9._-]+", "-", source.stem).strip("-") or "custom"
-        name = f"custom-{stem[:36]}.wav"
-        dest = paths.CUSTOM_SOUNDS_DIR / name
-        counter = 2
-        while dest.exists():
-            name = f"custom-{stem[:30]}-{counter}.wav"
-            dest = paths.CUSTOM_SOUNDS_DIR / name
-            counter += 1
+        self.bank.reload()
+        if self.window:
+            self.window.reload_sounds()
+            self.window.toast(f"Added {destination.name} to your sound library")
+        if on_imported:
+            on_imported(destination.name)
+
+    def remove_custom_sound(self, name: str) -> bool:
         try:
-            paths.CUSTOM_SOUNDS_DIR.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, dest)
-            self.bank.reload()
+            removed = library.remove_sound(name)
+        except library.SoundImportError as exc:
             if self.window:
-                self.window.reload_sounds()
-                self.window.toast(f"Imported {name}")
-        except Exception as exc:
-            if self.window:
-                self.window.toast(f"Could not import sound: {exc}", error=True)
+                self.window.toast(f"Could not remove sound: {exc}", error=True)
+            return False
+        if not removed:
+            return False
+
+        cfg = self.config
+        changed = False
+        for section in ("keys", "keyUp"):
+            section_data = cfg.data.get(section, {})
+            for key_id, rule in list(section_data.items()):
+                sounds = [s for s in rule.get("sounds", []) if s != name]
+                if len(sounds) == len(rule.get("sounds", [])):
+                    continue
+                changed = True
+                if sounds:
+                    rule["sounds"] = sounds
+                else:
+                    del section_data[key_id]
+        for rule in cfg.data.get("groups", {}).values():
+            sounds = [s for s in rule.get("sounds", []) if s != name]
+            if len(sounds) == len(rule.get("sounds", [])):
+                continue
+            changed = True
+            if sounds:
+                rule["sounds"] = sounds
+            else:
+                rule.update({"sounds": ["default.wav"], "mode": "single"})
+        if cfg.data.get("defaultSound") == name:
+            cfg.data["defaultSound"] = "default.wav"
+            changed = True
+        if changed:
+            self.config_changed()
+
+        self.bank.reload()
+        if self.window:
+            self.window.reload_sounds()
+            self.window.toast(f"Removed {name}")
+        return True
+
+    def show_my_sounds(self):
+        if not self.window:
+            return
+        dialog = Gtk.Dialog(title="My sounds", transient_for=self.window, modal=True)
+        dialog.set_default_size(560, 430)
+        dialog.add_button("Close", Gtk.ResponseType.CLOSE)
+        add_btn = dialog.add_button("Add sound…", Gtk.ResponseType.NONE)
+
+        content = dialog.get_content_area()
+        content.set_margin_top(14)
+        content.set_margin_bottom(12)
+        content.set_margin_start(16)
+        content.set_margin_end(16)
+        content.set_spacing(8)
+        content.pack_start(_eyebrow("YOUR SOUND LIBRARY"), False, False, 0)
+        path_label = Gtk.Label(label=str(paths.CUSTOM_SOUNDS_DIR))
+        path_label.set_xalign(0.0)
+        path_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+        path_label.get_style_context().add_class("hint")
+        content.pack_start(path_label, False, False, 0)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        listbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        scroll.add(listbox)
+        content.pack_start(scroll, True, True, 0)
+
+        def refresh():
+            for child in list(listbox.get_children()):
+                listbox.remove(child)
+            files = library.custom_sounds()
+            if not files:
+                empty = Gtk.Label(
+                    label="No custom sounds yet.\nUse “Add sound…” to import a WAV file.")
+                empty.set_justify(Gtk.Justification.CENTER)
+                empty.get_style_context().add_class("faint")
+                listbox.pack_start(empty, False, False, 24)
+            for path in files:
+                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+                row.get_style_context().add_class("card")
+                row.set_margin_top(2)
+                row.set_margin_bottom(2)
+                info = self.bank.info_for(path.name)
+                text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+                name_label = Gtk.Label(label=info.label if info else path.name)
+                name_label.set_xalign(0.0)
+                detail = path.name
+                if info and info.duration:
+                    detail += f"  ·  {info.duration:.2f} s"
+                detail += f"  ·  {path.stat().st_size // 1024 or 1} KB"
+                detail_label = Gtk.Label(label=detail)
+                detail_label.set_xalign(0.0)
+                detail_label.get_style_context().add_class("hint")
+                text.pack_start(name_label, False, False, 0)
+                text.pack_start(detail_label, False, False, 0)
+                row.pack_start(text, True, True, 8)
+
+                preview = Gtk.Button(label="Preview")
+                preview.get_style_context().add_class("pill")
+                preview.connect("clicked", lambda _b, n=path.name: self.dispatcher.test_rule(
+                    Rule((n,), "single", 1.0, 1.0, 0.0, "library-preview", n)))
+                row.pack_end(preview, False, False, 4)
+
+                remove = Gtk.Button(label="Remove")
+                remove.get_style_context().add_class("pill")
+                remove.get_style_context().add_class("ghost")
+                remove.connect("clicked", lambda _b, n=path.name: confirm_remove(n))
+                row.pack_end(remove, False, False, 4)
+                listbox.pack_start(row, False, False, 0)
+            listbox.show_all()
+
+        def confirm_remove(name):
+            confirm = Gtk.MessageDialog(
+                transient_for=dialog, modal=True, message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.YES_NO,
+                text=f"Remove {name}?",
+            )
+            confirm.format_secondary_text(
+                "The file is deleted from your sound library. Any key or category using it "
+                "falls back to default.wav.")
+            if confirm.run() == Gtk.ResponseType.YES:
+                self.remove_custom_sound(name)
+                refresh()
+            confirm.destroy()
+
+        def add_sound(*_):
+            self.choose_import_sound(on_imported=lambda _name: refresh())
+
+        add_btn.connect("clicked", add_sound)
+        refresh()
+        dialog.show_all()
+        dialog.run()
+        dialog.destroy()
 
     def choose_export_profile(self):
         default = re.sub(r"[^A-Za-z0-9._-]+", "-", str(self.config.data.get("profileName", "keysound"))).strip("-") or "keysound"

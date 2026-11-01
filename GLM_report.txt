@@ -180,6 +180,64 @@ Expected behaviour now:
   - To give letters a real weapon sound again, pick one in the Groups tab
     (e.g. letters -> machine_gun_burst.wav) or per key in the Key tab.
 
+--------------------------------------------------------------------------------
+5. NEW FEATURE - USER SOUND LIBRARY (ADD YOUR OWN SOUNDS)
+--------------------------------------------------------------------------------
+Implemented a first-class "add your own sounds" feature. Files are stored on
+the machine, survive restarts, and are managed from the UI.
+
+5.1 Where sounds are stored
+---------------------------
+    ~/.local/share/keysound/sounds/          (XDG_DATA_HOME respected)
+    file names: custom-<name>.wav
+    directory mode 0700, files mode 0600, collision suffix -2, -3, ...
+
+5.2 How to add a sound
+----------------------
+  - In the Key inspector or Groups inspector: press the "Add WAV…" button next
+    to the sound selector, choose a WAV file, and it is imported AND assigned
+    to the current key/category immediately.
+  - Menu ⋮ -> Add sound… imports without changing the current assignment.
+  - Menu ⋮ -> My sounds… opens the library manager (see 5.4).
+
+5.3 Validation
+--------------
+  - The file is decoded first; unreadable or empty WAVs are rejected with a
+    toast, so a broken file never enters the library.
+  - The stored name is sanitized to [a-z0-9._-] and prefixed with custom-.
+  - Only the basename is used, so a crafted path cannot escape the library.
+  - WAV only (8/16/24/32-bit PCM, mono/stereo, resampled to 48 kHz, 3 s cap).
+
+5.4 My sounds manager
+---------------------
+Menu ⋮ -> My sounds… lists every imported file with its duration and size.
+Each row has Preview and Remove; the dialog also has Add sound… and Close.
+Removing a file:
+  - deletes it from the library;
+  - removes it from any per-key, key-up or group assignment that referenced
+    it (empty groups reset to default.wav);
+  - resets defaultSound to default.wav if it pointed at the removed file;
+  - reloads the bank and all combo boxes immediately.
+
+5.5 Code changed
+----------------
+  - NEW keysound/library.py: import_sound(), custom_sounds(), remove_sound(),
+    sanitize_stem(), unique_destination(), SoundImportError.
+  - keysound/app.py: choose_import_sound(on_imported=...), remove_custom_sound(),
+    show_my_sounds() dialog; removed the old inline import code.
+  - keysound/ui.py: RuleEditor "Add WAV…" button (on_add_sound callback),
+    wired in KeyInspector/GroupInspector/MainWindow; menu entries "Add sound…",
+    "My sounds…", "Open sound library".
+  - tests/test_library.py: 9 new tests (68 total now, all pass).
+
+5.6 Verification
+----------------
+An isolated GTK run confirmed: custom file listed in the library, visible in
+the bank with custom=True, assigned to KEY_Z through the real inspector combo,
+My sounds dialog opened (screenshot saved during the test), file removed, and
+the KEY_Z assignment cleaned up afterwards. The main-window screenshot was
+retaken and shows the Add WAV… button; docs/screenshot.png is updated.
+
 ================================================================================
 END OF GLM REPORT
 ================================================================================

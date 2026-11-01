@@ -221,13 +221,15 @@ class RuleEditor(Gtk.Box):
                  on_apply: Callable[[list[str], str, float, float, float], None],
                  on_clear: Callable[[], None],
                  on_reset: Callable[[], None],
-                 on_preview: Callable[[list[str], str, float, float, float], None]):
+                 on_preview: Callable[[list[str], str, float, float, float], None],
+                 on_add_sound: Callable[["RuleEditor"], None] | None = None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         self.bank = bank
         self.on_apply = on_apply
         self.on_clear = on_clear
         self.on_reset = on_reset
         self.on_preview = on_preview
+        self.on_add_sound = on_add_sound
         self._loading = False
         self._context_key = ""
         self._allow_fallback = True
@@ -265,9 +267,17 @@ class RuleEditor(Gtk.Box):
 
         self.sound_label = _label("SOUND", "eyebrow")
         self.pack_start(self.sound_label, False, False, 0)
+        sound_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.sound_combo = Gtk.ComboBoxText()
         self.sound_combo.connect("changed", self._on_sound_changed)
-        self.pack_start(self.sound_combo, False, False, 0)
+        sound_row.pack_start(self.sound_combo, True, True, 0)
+        self.add_sound_btn = _button("Add WAV…", "ghost", "pill")
+        self.add_sound_btn.set_valign(Gtk.Align.CENTER)
+        self.add_sound_btn.set_tooltip_text(
+            "Import a WAV from your computer; it is copied to your personal sound library")
+        self.add_sound_btn.connect("clicked", self._on_add_sound_clicked)
+        sound_row.pack_start(self.add_sound_btn, False, False, 0)
+        self.pack_start(sound_row, False, False, 0)
 
         variant_head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         variant_head.pack_start(_label("VARIANTS", "eyebrow"), True, True, 0)
@@ -407,6 +417,10 @@ class RuleEditor(Gtk.Box):
                     self._loading = was
             self._emit()
 
+    def _on_add_sound_clicked(self, *_):
+        if self.on_add_sound:
+            self.on_add_sound(self)
+
     def _on_add_variant(self, *_):
         name = self.sound_combo.get_active_id()
         if not name or name == "__fallback__" or name in self._sounds:
@@ -475,7 +489,7 @@ class RuleEditor(Gtk.Box):
 
 
 class KeyInspector(Gtk.Box):
-    def __init__(self, app, bank: SoundBank):
+    def __init__(self, app, bank: SoundBank, on_add_sound=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.app = app
         self.key_id: str | None = None
@@ -485,6 +499,7 @@ class KeyInspector(Gtk.Box):
             on_clear=self._clear,
             on_reset=self._clear,
             on_preview=self._preview,
+            on_add_sound=on_add_sound,
         )
         self.pack_start(self.editor, False, False, 0)
 
@@ -542,7 +557,7 @@ class KeyInspector(Gtk.Box):
 
 
 class GroupInspector(Gtk.Box):
-    def __init__(self, app, bank: SoundBank):
+    def __init__(self, app, bank: SoundBank, on_add_sound=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.app = app
         self.group = "letters"
@@ -560,6 +575,7 @@ class GroupInspector(Gtk.Box):
             on_clear=lambda: None,
             on_reset=self._reset,
             on_preview=self._preview,
+            on_add_sound=on_add_sound,
         )
         self.pack_start(self.editor, False, False, 0)
 
@@ -655,11 +671,13 @@ class MainWindow(Gtk.ApplicationWindow):
 
         menu = Gtk.Menu()
         for label, callback in (
-            ("Import sound…", lambda *_: self.app.choose_import_sound()),
+            ("Add sound…", lambda *_: self.app.choose_import_sound()),
+            ("My sounds…", lambda *_: self.app.show_my_sounds()),
             ("Import profile…", lambda *_: self.app.choose_import_profile()),
             ("Export profile…", lambda *_: self.app.choose_export_profile()),
             (None, None),
             ("Open config folder", lambda *_: self.app.open_folder(paths.CONFIG_DIR)),
+            ("Open sound library", lambda *_: self.app.open_folder(paths.CUSTOM_SOUNDS_DIR)),
             ("Input setup…", lambda *_: self.app.show_input_status()),
             ("About KeySound", lambda *_: self.app.show_about()),
             (None, None),
@@ -818,8 +836,8 @@ class MainWindow(Gtk.ApplicationWindow):
         self.stack.set_margin_end(14)
         self.stack.set_margin_top(12)
         self.stack.set_margin_bottom(12)
-        self.key_inspector = KeyInspector(self.app, self.app.bank)
-        self.group_inspector = GroupInspector(self.app, self.app.bank)
+        self.key_inspector = KeyInspector(self.app, self.app.bank, on_add_sound=self._add_sound)
+        self.group_inspector = GroupInspector(self.app, self.app.bank, on_add_sound=self._add_sound)
         self.stack.add_titled(self._scroll(self.key_inspector), "key", "Key")
         self.stack.add_titled(self._scroll(self.group_inspector), "groups", "Groups")
         self.stack_switcher.set_stack(self.stack)
@@ -973,6 +991,14 @@ class MainWindow(Gtk.ApplicationWindow):
         self.keyboard.set_selected(key_id)
         self.key_inspector.load(key_id)
         self.stack.set_visible_child_name("key")
+
+    def _add_sound(self, editor) -> None:
+        """Import a WAV and immediately assign it to the editor's key/group."""
+        def assign(name: str) -> None:
+            editor.rebuild_sounds()
+            editor.sound_combo.set_active_id(name)
+
+        self.app.choose_import_sound(on_imported=assign)
 
     def flash_key(self, key_id: str) -> None:
         self.keyboard.flash(key_id)

@@ -564,8 +564,13 @@ check item.
 
 7.7 Dialogs
 -----------
-  - Import sound: file chooser filtered to WAV; validates by decoding before
-    copying; stores as custom-<name>.wav with collision numbering.
+  - Add sound: reachable from the Add WAV… button in both inspectors and from
+    Menu → My sounds…. Validates by decoding, stores as
+    ~/.local/share/keysound/sounds/custom-<name>.wav with collision numbering,
+    reloads the bank, and assigns the new sound to the inspector that opened
+    it. The My sounds dialog lists the library with duration/size, Preview and
+    Remove; removing also clears any key/category assignment that used it
+    (they fall back to default.wav).
   - Import/Export profile: .keysound file chooser with overwrite confirmation.
   - Input status: explains the active backend, provides a copyable
     "sudo usermod -aG input $USER" command, the logout/relogin instruction, and
@@ -721,11 +726,11 @@ Command:
 
     python3 -m unittest discover -s tests -t . -v
 
-Result: 57 tests, 0 failures, 0 errors (0.025 s).
+Result: 68 tests, 0 failures, 0 errors (about 0.06 s).
 
 Coverage by file:
 
-  tests/test_config.py (18 tests)
+  tests/test_config.py (19 tests)
     - group fallback, key override precedence, modifier group;
     - disabled group falls through to default; disabled key override ignored;
     - master volume clamping; enabled/muted independence;
@@ -745,7 +750,7 @@ Coverage by file:
     - positive widths; every layout key exists in the code table;
     - all_known_keys sanity.
 
-  tests/test_audio.py (15 tests)
+  tests/test_audio.py (16 tests)
     - 16-bit mono, stereo downmix, 8/24/32-bit, resampling, 2 s cap, empty file;
     - voice gain and pitch, pitch clamping, 12-voice stealing;
     - muted block + forced play, missing sound fallback;
@@ -761,6 +766,13 @@ Coverage by file:
   tests/test_autostart.py (4 tests)
     - valid desktop entry with --minimized, removal, idempotent disable,
       sync_from_disk in both directions.
+
+  tests/test_library.py (9 tests)
+    - WAV import and name sanitization; collision numbering;
+    - invalid, empty and missing files rejected;
+    - sorted listing filters non-WAV files;
+    - removal deletes only library files and rejects path traversal;
+    - SoundBank lists an imported file as a custom sound.
 
 10.2 End-to-end GTK smoke test
 ------------------------------
