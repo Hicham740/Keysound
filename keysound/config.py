@@ -17,76 +17,59 @@ from .keymap import (
     GROUP_LABELS, key_group, key_label,
 )
 
+# Every category falls back to the single "default.wav" sound so a fresh
+# install sounds uniform; per-category (and per-key) overrides are opt-in.
 DEFAULT_GROUPS: dict[str, dict[str, Any]] = {
     "letters": {
-        "sounds": ["letter-1.wav", "letter-2.wav", "letter-3.wav"],
-        "mode": "random", "volume": 1.0, "pitch": 1.0, "jitter": 0.018,
+        "sounds": ["default.wav"],
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
     "digits": {
-        "sounds": ["digit-1.wav", "digit-2.wav"],
-        "mode": "random", "volume": 1.0, "pitch": 1.0, "jitter": 0.015,
+        "sounds": ["default.wav"],
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
     "punctuation": {
-        "sounds": ["punct-1.wav", "punct-2.wav"],
-        "mode": "random", "volume": 1.0, "pitch": 1.0, "jitter": 0.012,
+        "sounds": ["default.wav"],
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
     "modifiers": {
-        "sounds": ["mod-1.wav", "mod-2.wav"],
-        "mode": "random", "volume": 0.75, "pitch": 1.0, "jitter": 0.01,
+        "sounds": ["default.wav"],
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
     "function": {
-        "sounds": ["fn-1.wav", "fn-2.wav"],
-        "mode": "random", "volume": 0.9, "pitch": 1.0, "jitter": 0.012,
+        "sounds": ["default.wav"],
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
     "navigation": {
-        "sounds": ["nav-1.wav", "nav-2.wav"],
-        "mode": "roundRobin", "volume": 1.0, "pitch": 1.0, "jitter": 0.01,
+        "sounds": ["default.wav"],
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
     "numpad": {
-        "sounds": ["numpad-1.wav", "numpad-2.wav"],
-        "mode": "random", "volume": 1.0, "pitch": 1.0, "jitter": 0.012,
+        "sounds": ["default.wav"],
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
     "controls": {
         "sounds": ["default.wav"],
-        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.008,
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
     "media": {
         "sounds": ["default.wav"],
-        "mode": "single", "volume": 0.9, "pitch": 1.0, "jitter": 0.008,
+        "mode": "single", "volume": 1.0, "pitch": 1.0, "jitter": 0.0,
         "enabled": True,
     },
 }
 
-DEFAULT_KEYS: dict[str, dict[str, Any]] = {
-    "KEY_SPACE": {
-        "sounds": ["space.wav"], "mode": "single", "volume": 1.0,
-        "pitch": 1.0, "jitter": 0.006, "enabled": True,
-    },
-    "KEY_ENTER": {
-        "sounds": ["boom.wav"], "mode": "single", "volume": 1.0,
-        "pitch": 0.95, "jitter": 0.005, "enabled": True,
-    },
-    "KEY_KPENTER": {
-        "sounds": ["boom.wav"], "mode": "single", "volume": 0.9,
-        "pitch": 1.0, "jitter": 0.005, "enabled": True,
-    },
-    "KEY_BACKSPACE": {
-        "sounds": ["backspace.wav"], "mode": "single", "volume": 1.0,
-        "pitch": 1.0, "jitter": 0.008, "enabled": True,
-    },
-    "KEY_ESC": {
-        "sounds": ["escape.wav"], "mode": "single", "volume": 0.95,
-        "pitch": 1.0, "jitter": 0.006, "enabled": True,
-    },
-}
+# No per-key overrides ship by default: keys with no explicit assignment use
+# their category, and every category above uses default.wav.
+DEFAULT_KEYS: dict[str, dict[str, Any]] = {}
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "version": 1,

@@ -30,20 +30,30 @@ class ConfigDefaultsTest(unittest.TestCase):
     def test_group_fallback(self):
         rule = self.cfg.resolve("KEY_A")
         self.assertEqual(rule.source, "group:letters")
-        self.assertEqual(rule.mode, "random")
-        self.assertEqual(len(rule.sounds), 3)
-        self.assertIn("letter-1.wav", rule.sounds)
+        self.assertEqual(rule.mode, "single")
+        self.assertEqual(rule.sounds, ("default.wav",))
+
+    def test_every_category_defaults_to_default_wav(self):
+        groups = self.cfg.data["groups"]
+        self.assertEqual(set(groups), set(GROUP_LABELS))
+        for name in groups:
+            self.assertEqual(groups[name]["sounds"], ["default.wav"], name)
+            self.assertEqual(groups[name]["volume"], 1.0, name)
+            self.assertTrue(groups[name]["enabled"], name)
 
     def test_key_override_wins(self):
-        rule = self.cfg.resolve("KEY_SPACE")
+        self.cfg.set_key_rule("KEY_Q", ["shotgun.wav"], "single", 1.0, 1.0, 0.0)
+        rule = self.cfg.resolve("KEY_Q")
         self.assertEqual(rule.source, "key")
-        self.assertEqual(rule.sounds, ("space.wav",))
-        self.assertEqual(key_group("KEY_SPACE"), "controls")
+        self.assertEqual(rule.sounds, ("shotgun.wav",))
+
+    def test_no_shipped_key_overrides(self):
+        self.assertEqual(DEFAULT_KEYS, {})
 
     def test_modifier_group(self):
         rule = self.cfg.resolve("KEY_LEFTSHIFT")
         self.assertEqual(rule.source, "group:modifiers")
-        self.assertLess(rule.volume, 1.0)
+        self.assertEqual(rule.volume, 1.0)
 
     def test_disabled_group_falls_back_to_default(self):
         self.cfg.data["groups"]["letters"]["enabled"] = False
@@ -52,6 +62,7 @@ class ConfigDefaultsTest(unittest.TestCase):
         self.assertEqual(rule.sounds, ("default.wav",))
 
     def test_key_rule_disabled_is_ignored(self):
+        self.cfg.set_key_rule("KEY_SPACE", ["shotgun.wav"], "single", 1.0, 1.0, 0.0)
         self.cfg.data["keys"]["KEY_SPACE"]["enabled"] = False
         rule = self.cfg.resolve("KEY_SPACE")
         self.assertEqual(rule.source, "group:controls")
@@ -99,7 +110,10 @@ class ConfigDefaultsTest(unittest.TestCase):
         cfg.load()
         self.assertIsNotNone(cfg.load_error)
         self.assertTrue(self.path.with_suffix(".json.corrupt").exists())
-        self.assertEqual(cfg.resolve("KEY_SPACE").source, "key")
+        # Defaults fall through to the category, which now ships with
+        # default.wav (there are no shipped per-key overrides any more).
+        self.assertEqual(cfg.resolve("KEY_SPACE").source, "group:controls")
+        self.assertEqual(cfg.resolve("KEY_SPACE").sounds, ("default.wav",))
 
     def test_explicit_empty_key_map_is_kept(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,7 +163,7 @@ class CleanRuleTest(unittest.TestCase):
 class SoundLookupTest(unittest.TestCase):
     def test_builtin_sounds_exist(self):
         names = list_sound_files()
-        self.assertGreaterEqual(len(names), 20)
+        self.assertGreaterEqual(len(names), 10)
         self.assertIn("default.wav", names)
         self.assertIn("shotgun.wav", names)
         for name in names:

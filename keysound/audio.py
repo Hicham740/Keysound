@@ -23,7 +23,7 @@ SAMPLE_RATE = 48_000
 CHANNELS = 1
 FRAMES_PER_BLOCK = 256
 MAX_VOICES = 12
-MAX_SOUND_SECONDS = 2.0
+MAX_SOUND_SECONDS = 3.0  # user samples can run long (e.g. artillery, 2.4 s)
 
 
 @dataclass(frozen=True)
@@ -195,11 +195,16 @@ class Mixer:
         name = self._choose(rule)
         data = self.bank.get(name)
         if data is None or data.size < 2:
-            # A missing assignment falls back to the default sound when possible.
-            data = self.bank.get(cfg.data.get("defaultSound", "default.wav"))
-            name = cfg.data.get("defaultSound", "default.wav")
+            # A missing assignment falls back to the configured default sound,
+            # and if even that is unavailable, to the built-in default.wav.
+            fallback = str(cfg.data.get("defaultSound", "default.wav"))
+            data = self.bank.get(fallback)
+            if data is None or data.size < 2:
+                fallback = "default.wav"
+                data = self.bank.get(fallback)
             if data is None:
                 return False
+            name = fallback
         jitter = self.rng.uniform(-rule.jitter, rule.jitter) if rule.jitter else 0.0
         pitch = max(0.5, min(2.0, rule.pitch + jitter))
         gain = max(0.0, min(1.5, rule.volume)) * cfg.master_volume

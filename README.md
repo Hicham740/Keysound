@@ -185,44 +185,47 @@ Example (truncated):
   "defaultSound": "default.wav",
   "groups": {
     "letters": {
-      "sounds": ["letter-1.wav", "letter-2.wav", "letter-3.wav"],
-      "mode": "random",
+      "sounds": ["default.wav"],
+      "mode": "single",
       "volume": 1.0,
       "pitch": 1.0,
-      "jitter": 0.018,
+      "jitter": 0.0,
       "enabled": true
     }
   },
   "keys": {
-    "KEY_SPACE": {"sounds": ["space.wav"], "mode": "single", "volume": 1.0,
-                  "pitch": 1.0, "jitter": 0.006, "enabled": true}
+    "KEY_SPACE": {"sounds": ["shotgun.wav"], "mode": "single", "volume": 1.0,
+                  "pitch": 1.0, "jitter": 0.008, "enabled": true}
   }
 }
 ```
 
 ## Sounds
 
-All 24 built-in sounds are original, deterministic synthesizer output generated
-by `tools/generate_sounds.py`. The default set models a bright, high, clicky
-mechanical switch: a 1-2 ms impact transient, inharmonic plastic-snap
-resonances around 4-9 kHz, a metallic spring ping, plate/housing modes around
-1.3-4.3 kHz, a short bottom-out thock, and a filtered housing tail. The result
-is crisp and high without sounding like a thin beep.
+The shipped set is an **arsenal weapon pack** (12 sounds: default shot,
+shotgun, bomb, sniper click, mag drop, digits burst, rifles, machine gun,
+artillery, tank cannon, plus a legacy key-up tick), provided by the user.
+`manifest.json` next to the WAVs lists every file with its label and
+description; only files listed there are shown in the UI.
 
-They are released with the project as CC0-style material; there are no sampled
-third-party recordings and no licensing ambiguity. `thock.wav` is the deeper
-alternate if you want more weight and less click.
+- Categories ship with **`default.wav` for all of them**: until you assign
+  something, every key — letters, digits, modifiers, everything — plays the
+  default shot. Per-key and per-category assignments are opt-in.
+- The decoded length cap is 3 seconds, so the longer cannon shots survive.
+- If `defaultSound` or an assignment points at a deleted file, playback falls
+  back to `default.wav` instead of going silent.
 
-Regenerate them with:
+The legacy synthesized "high clicky" set can still be regenerated into this
+folder from `tools/generate_sounds.py`, but the script **refuses to write**
+unless you pass `--write`, because it would overwrite the weapon samples:
 
 ```bash
-python3 tools/generate_sounds.py
-python3 tools/generate_icons.py
+python3 tools/generate_sounds.py --write   # legacy clicky set (overwrites!)
 ```
 
 Import your own sounds from **Menu → Import sound…**. Only PCM WAV is accepted
-(8/16/24/32-bit, mono or stereo; resampled to 48 kHz and capped at two seconds).
-Imports are copied to `~/.local/share/keysound/sounds/` with a `custom-` prefix.
+(8/16/24/32-bit, mono or stereo; resampled to 48 kHz). Imports are copied to
+`~/.local/share/keysound/sounds/` with a `custom-` prefix.
 
 ## Privacy
 

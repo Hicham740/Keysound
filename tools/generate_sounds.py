@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 import wave
 from pathlib import Path
 
@@ -201,6 +202,19 @@ def write(name: str, data: np.ndarray):
 
 
 def main():
+    # The shipped sound set is now user-supplied weapon samples.  Regenerating
+    # would overwrite them, so writing is opt-in.
+    if "--write" not in sys.argv:
+        print(
+            "Refusing to write: the shipped sounds in\n"
+            f"  {OUT}\n"
+            "are user-supplied samples and running this script would overwrite\n"
+            "them.  If you really want to regenerate the legacy synthesized\n"
+            "clicky set, back up the folder first and run:\n"
+            "    python3 tools/generate_sounds.py --write\n",
+            file=sys.stderr,
+        )
+        return 1
     sounds = {
         # Balanced, bright default click.
         "default.wav": key_model(seed=BASE_SEED + 1, pitch=1.03),

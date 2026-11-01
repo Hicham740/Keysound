@@ -1,0 +1,185 @@
+================================================================================
+GLM REPORT - SOUND / MANIFEST / DEFAULT-MAPPING CHANGES
+================================================================================
+Date:        1 November 2026
+Project:     KeySound (Kali Linux edition)
+Folder:      /home/hicham/Desktop/projects/shotgunkeyboard
+
+This file describes exactly what was changed on this date, and why.
+
+--------------------------------------------------------------------------------
+1. THE SITUATION BEFORE
+--------------------------------------------------------------------------------
+The built-in sound set had been replaced with new user-supplied WEAPON sounds
+(shotgun, bomb, sniper click, rifles, machine gun, artillery, tank cannon,
+mag drop, digit burst) in keysound/assets/sounds/. But three things still
+referenced the OLD sound set and were broken:
+
+  1. manifest.json still listed 24 old files (thock.wav, boom.wav, letter-1.wav
+     ...) of which only shotgun.wav and release.wav actually existed.
+     21 entries pointed at files that were no longer on disk.
+  2. The shipped defaults in keysound/config.py gave every category its own
+     old click sounds (letter-1/2/3.wav, mod-1/2.wav, fn-1/2.wav,
+     numpad-1/2.wav ...) and shipped per-key overrides pointing to files like
+     space.wav, boom.wav, backspace.wav and escape.wav that no longer exist.
+  3. Your personal settings (~/.config/keysound/settings.json) still pointed
+     at deleted files:
+       defaultSound        -> mod-1.wav      (deleted)
+       group modifiers     -> mod-1/mod-2    (deleted)
+       group function      -> fn-1/fn-2      (deleted)
+       group numpad        -> numpad-1/2     (deleted)
+       key KEY_KPENTER     -> boom.wav       (deleted)
+       key KEY_ESC         -> escape.wav     (deleted)
+     With mixer_fallback pointing at mod-1.wav too, keys with missing sounds
+     would have played SILENCE.
+
+--------------------------------------------------------------------------------
+2. WHAT WAS CHANGED
+--------------------------------------------------------------------------------
+
+2.1 manifest.json reviewed and REWRITTEN
+----------------------------------------
+keysound/assets/sounds/manifest.json was rebuilt (version 3, "Kali Field
+Kit - Arsenal") to match the 12 REAL files on disk, each with a label and
+description:
+
+    default.wav             "Default shot"
+    digit_burst.wav         "Digit burst"
+    sniper_click.wav        "Sniper click"
+    mag_drop.wav            "Magazine drop"
+    assault_rifle_auto.wav  "Assault rifle (auto)"
+    machine_gun_burst.wav   "Machine gun burst"
+    shotgun.wav             "Shotgun"
+    bolt_rifle.wav          "Bolt-action rifle"
+    artillery_cannon.wav    "Artillery cannon"
+    tank_cannon.wav         "Tank cannon"
+    bomb.wav                "Bomb explosion"
+    release.wav             "Release tick (legacy key-up tick)"
+
+The decoded sound count reported by --diagnose is now 12, with no decode
+errors. The manifest is the single source of truth for what appears in the
+UI sound lists.
+
+2.2 Every category defaults to default.wav
+------------------------------------------
+keysound/config.py:
+
+  - DEFAULT_GROUPS: all nine categories (letters, digits, punctuation,
+    modifiers, function, navigation, numpad, controls, media) now use simply
+        sounds = ["default.wav"], mode single, volume 1.0, pitch 1.0.
+    Until you assign something, EVERY key plays the default shot.
+  - DEFAULT_KEYS: cleared to {}. No per-key override ships any more.
+
+This only affects NEW settings files. Your existing file was migrated too
+(see 2.3).
+
+2.3 Your personal settings were migrated
+----------------------------------------
+~/.config/keysound/settings.json was rewritten while the app was stopped:
+
+  - defaultSound: mod-1.wav -> default.wav.
+  - group modifiers / function / numpad: deleted files -> default.wav,
+    volume restored to 1.0 (the old 0.75/0.9 preset values were also part of
+    the old defaults, not your choice).
+  - category entries still pointing at default.wav were normalized to
+    single/1.0/1.0/jitter 0 so untouched categories are all identical.
+  - your digits category kept "digit_burst.wav" (it exists and looks chosen).
+  - key overrides pointing at missing files were removed so they fall back to
+    the category default:
+        KEY_KPENTER (boom.wav)  -> removed
+        KEY_ESC     (escape.wav) -> removed
+  - your key choices that still exist were kept:
+        KEY_SPACE     -> shotgun.wav
+        KEY_ENTER     -> bomb.wav
+        KEY_TAB       -> bomb.wav
+        KEY_BACKSPACE -> sniper_click.wav
+        KEY_A         -> default.wav
+  - file permissions kept at 0600.
+
+2.4 Missing sounds can no longer produce silence two ways
+--------------------------------------------------------
+keysound/audio.py (Mixer.play): when a rule's sound is missing, the fallback
+chain is now:
+    rule sound -> cfg defaultSound -> built-in default.wav.
+Previously, if defaultSound itself was missing (exactly what had happened),
+the mixer gave up and played nothing.
+
+2.5 3-second decode cap
+-----------------------
+keysound/audio.py: MAX_SOUND_SECONDS was raised 2.0 -> 3.0 because your
+artillery_cannon.wav is 2.4 s long and was being silently truncated.
+
+2.6 Your samples are now protected
+----------------------------------
+tools/generate_sounds.py can regenerate the OLD synthesized "high clicky"
+set. Running it would have overwritten your weapon samples, so the script now
+REFUSES to write unless you pass --write:
+
+    python3 tools/generate_sounds.py            -> prints a warning, writes nothing
+    python3 tools/generate_sounds.py --write    -> regenerates the legacy set
+
+If you ever want the old clicky set back, it is preserved in
+/tmp/opencode/keysound-old-sounds/ (temporary) and via git history
+(commit "Enhancing the sounds set" is the weapon-pack import; earlier commits
+contain the synthesized set).
+
+2.7 docs/sound-preview.wav regenerated
+--------------------------------------
+The preview WAV in docs/ was rebuilt from your new arsenal sounds in play
+order, ~17 s, so you can audition the whole pack in any media player.
+
+2.8 Tests updated (59 tests, all pass)
+--------------------------------------
+tests/test_config.py adjusted to the new defaults:
+
+  - test_group_fallback: letters -> default.wav, single mode;
+  - NEW test_every_category_defaults_to_default_wav: all nine groups use
+    default.wav, enabled, volume 1.0;
+  - test_key_override_wins: now sets its own rule (no shipped overrides);
+  - NEW test_no_shipped_key_overrides: DEFAULT_KEYS == {};
+  - test_modifier_group: modifiers now volume 1.0;
+  - test_key_rule_disabled_is_ignored: creates its own override first;
+  - test_corrupt_file_...: corrupt file now resolves through the category
+    to default.wav;
+  - test_builtin_sounds_exist: lower bound 24 -> 10 to match the 12-file set.
+
+Also verified live: --diagnose shows 12 sounds / no errors, and a real
+Mixer+AudioEngine play of KEY_A through your actual settings works.
+
+2.9 Documentation updated
+-------------------------
+README.md: settings example now shows letters -> default.wav, the Sounds
+section describes the arsenal pack, the 3 s cap, the default.wav fallback,
+and the --write protection. IMPLEMENTATION_REPORT.txt: sections 2.4, 11.1
+and Appendix B updated to describe the arsenal set and the new defaults.
+
+--------------------------------------------------------------------------------
+3. WHAT WAS NOT TOUCHED
+--------------------------------------------------------------------------------
+  - No sound files were modified, renamed or deleted. Your weapon WAVs are
+    byte-for-byte as you provided them.
+  - shotgun.wav was not re-processed: you now supply your own versions, so the
+    app plays exactly what you put there. If a sound feels too quiet, either
+    raise the per-key/per-category volume in the UI (up to 150 %) or replace
+    the file with a louder master.
+  - The UI, listener, dispatcher, tray and packaging code are unchanged
+    except for the two small audio fixes above.
+
+--------------------------------------------------------------------------------
+4. HOW TO VERIFY YOURSELF
+--------------------------------------------------------------------------------
+    cd /home/hicham/Desktop/projects/shotgunkeyboard
+    python3 -m unittest discover -s tests -t .     # 59 tests, OK
+    python3 -m keysound --diagnose                 # sounds: 12, no errors
+    python3 -m keysound                            # try typing
+
+Expected behaviour now:
+  - Typed keys: default.wav (the default shot) everywhere, except
+    Space -> shotgun.wav, Enter/Tab -> bomb.wav, Backspace -> sniper_click.wav,
+    digits -> digit_burst.wav (category), and your KEY_A -> default.wav rule.
+  - To give letters a real weapon sound again, pick one in the Groups tab
+    (e.g. letters -> machine_gun_burst.wav) or per key in the Key tab.
+
+================================================================================
+END OF GLM REPORT
+================================================================================

@@ -1,127 +1,68 @@
 {
-  "name": "Kali Field Kit \u2014 High Clicky",
-  "version": 2,
-  "license": "CC0-1.0 (synthesized for this project)",
+  "name": "Kali Field Kit \u2014 Arsenal",
+  "version": 3,
+  "license": "user-supplied samples bundled with this profile",
+  "defaultSound": "default.wav",
   "sounds": [
     {
+      "file": "artillery_cannon.wav",
+      "label": "Artillery cannon",
+      "description": "Long artillery cannon blast (trimmed to 3 s max) \u2014 44100 Hz, 2.40 s"
+    },
+    {
+      "file": "assault_rifle_auto.wav",
+      "label": "Assault rifle (auto)",
+      "description": "Automatic rifle burst \u2014 44100 Hz, 0.80 s"
+    },
+    {
+      "file": "bolt_rifle.wav",
+      "label": "Bolt-action rifle",
+      "description": "Single bolt-action rifle shot \u2014 44100 Hz, 0.80 s"
+    },
+    {
+      "file": "bomb.wav",
+      "label": "Bomb explosion",
+      "description": "Deep explosion with debris tail \u2014 44100 Hz, 1.40 s"
+    },
+    {
       "file": "default.wav",
-      "label": "High click \u2014 default",
-      "description": "Bright mechanical click with a crisp high transient"
+      "label": "Default shot",
+      "description": "Standard shot used by every unassigned key and category \u2014 44100 Hz, 0.28 s"
     },
     {
-      "file": "thock.wav",
-      "label": "Deep thock",
-      "description": "Deeper, heavier bottom-out with a softer click"
+      "file": "digit_burst.wav",
+      "label": "Digit burst",
+      "description": "Quick burst used for digits \u2014 44100 Hz, 0.30 s"
     },
     {
-      "file": "boom.wav",
-      "label": "Heavy Enter",
-      "description": "Weighty Enter / numpad bottom-out"
+      "file": "machine_gun_burst.wav",
+      "label": "Machine gun burst",
+      "description": "Heavy machine gun burst \u2014 44100 Hz, 1.00 s"
     },
     {
-      "file": "space.wav",
-      "label": "Spacebar",
-      "description": "Wide spacebar with a deep, long body"
-    },
-    {
-      "file": "backspace.wav",
-      "label": "Backspace",
-      "description": "Strong, bright delete clack"
-    },
-    {
-      "file": "escape.wav",
-      "label": "Escape snap",
-      "description": "Sharp, high escape click"
-    },
-    {
-      "file": "letter-1.wav",
-      "label": "Letter A",
-      "description": "High clicky letter variant 1"
-    },
-    {
-      "file": "letter-2.wav",
-      "label": "Letter B",
-      "description": "High clicky letter variant 2"
-    },
-    {
-      "file": "letter-3.wav",
-      "label": "Letter C",
-      "description": "High clicky letter variant 3"
-    },
-    {
-      "file": "digit-1.wav",
-      "label": "Digit A",
-      "description": "Bright digit click 1"
-    },
-    {
-      "file": "digit-2.wav",
-      "label": "Digit B",
-      "description": "Bright digit click 2"
-    },
-    {
-      "file": "mod-1.wav",
-      "label": "Modifier A",
-      "description": "Short, high modifier tick"
-    },
-    {
-      "file": "mod-2.wav",
-      "label": "Modifier B",
-      "description": "Higher, lighter modifier tick"
-    },
-    {
-      "file": "fn-1.wav",
-      "label": "Function A",
-      "description": "Crisp function-row click"
-    },
-    {
-      "file": "fn-2.wav",
-      "label": "Function B",
-      "description": "Higher function-row click"
-    },
-    {
-      "file": "nav-1.wav",
-      "label": "Navigation A",
-      "description": "Medium navigation click"
-    },
-    {
-      "file": "nav-2.wav",
-      "label": "Navigation B",
-      "description": "Brighter navigation click"
-    },
-    {
-      "file": "numpad-1.wav",
-      "label": "Numpad A",
-      "description": "Heavy numpad click 1"
-    },
-    {
-      "file": "numpad-2.wav",
-      "label": "Numpad B",
-      "description": "Heavy numpad click 2"
-    },
-    {
-      "file": "punct-1.wav",
-      "label": "Punctuation A",
-      "description": "Very high punctuation tick"
-    },
-    {
-      "file": "punct-2.wav",
-      "label": "Punctuation B",
-      "description": "Highest punctuation tick"
+      "file": "mag_drop.wav",
+      "label": "Magazine drop",
+      "description": "Metallic magazine drop and clack \u2014 44100 Hz, 0.40 s"
     },
     {
       "file": "release.wav",
       "label": "Release tick",
-      "description": "Light, high key-up tick"
-    },
-    {
-      "file": "test.wav",
-      "label": "Test hit",
-      "description": "Balanced preview click"
+      "description": "Legacy key-up tick (Kept from the original set) \u2014 48000 Hz, 0.03 s"
     },
     {
       "file": "shotgun.wav",
       "label": "Shotgun",
-      "description": "Optional punchy blast with a high crack"
+      "description": "Loud shotgun blast \u2014 44100 Hz, 1.30 s"
+    },
+    {
+      "file": "sniper_click.wav",
+      "label": "Sniper click",
+      "description": "Sharp bolt-action style click \u2014 44100 Hz, 0.60 s"
+    },
+    {
+      "file": "tank_cannon.wav",
+      "label": "Tank cannon",
+      "description": "Heavy tank cannon shot \u2014 44100 Hz, 1.80 s"
     }
   ]
 }
